@@ -1,6 +1,6 @@
 # Quartet subsampling for inferring phylogenetic networks
 
-## Installing
+## Installation
 
 These two currently available options for installing `qsin` use the files `environment.yml` and `build.sh`, which are located among this repository files
 
