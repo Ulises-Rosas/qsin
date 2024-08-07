@@ -18,7 +18,3 @@ conda activate qsin
 ./build.sh
 ```
 
-### Option 3: Using Docker (for Linux only)
-
-
-
