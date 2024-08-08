@@ -1,4 +1,4 @@
-# Quartet subsampling for inferring phylogenetic networks
+# Quartet subsampling for inferring phylogenetic networks: A sparse machine learning approach
 
 ## Installation
 
