@@ -1,8 +1,5 @@
 #!/usr/bin/env Rscript
 
-library(SiPhyNetwork)
-library(parallel)
-
 args = commandArgs(trailingOnly=T)
 
 N = NULL
@@ -68,6 +65,11 @@ for(i in 1:length(args)){
 if (is.null(N) == T){
   help_msg()
 }
+
+
+# importing libraries
+library(SiPhyNetwork)
+library(parallel)
 
 
 inheritance.fxn <- make.beta.draw(10,10)

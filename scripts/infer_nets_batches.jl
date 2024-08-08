@@ -1,11 +1,119 @@
 #!/usr/bin/env julia
 
 
+# make default values for the arguments
+startfile = "";
+buckyCFfile = "";
+batches = "";
+
+h_max = 1;
+n_epochs = 1;
+tk = Inf;
+seed = 12038;
+nruns = 10;
+Nfail = 75;
+prefix = "NetInference";
+ncores = 1;
+
+
+
+function help_func()
+    # make a help message
+    help_message = """
+
+        Infer phylogenetic networks from batches of the Concordance Factors (CFs) 
+        using a simulated annealing algorithm. This algorithm uses the SNaQ algorithm
+        and warm starts.
+
+        Notice that if you give a single batch and 1 epoch, then you will have the 
+        phylogenetic networks for that batch using the starting tree when the the
+        default parameters are set.
+
+    Usage: $(PROGRAM_FILE) startfile CFfile batches 
+            --h_max h_max --n_epochs n_epochs --tk tk --seed seed
+            --nruns nruns --Nfail Nfail --prefix prefix 
+
+    Required arguments:
+        startfile: str; path to the file with the starting network.
+        CFfile: str; path to the file with the CFs
+        batches: str; path to the file with the batches
+
+    Optional arguments:
+        --h_max h_max: int; maximum number of hybridizations. (default: $h_max)
+        --n_epochs n_epochs: int; number of epochs. (default: $n_epochs)
+        --tk tk: float; temperature. Inf temperature
+            accepts all suboptimal moves. Lower than Inf
+            a probability of accepting a suboptimal move is
+            calculated. (default: $tk)
+        --seed seed: int; seed for the random number generator. (default: $seed)
+        --nruns nruns: int; number of runs. (default: $nruns)
+        --Nfail Nfail: int; number of failures. (default: $Nfail)
+        --prefix prefix: str; prefix for the output files. (default: $prefix)
+        --ncores: int; number of cores for running SNaQ (default: $ncores)    
+    """;
+    println(help_message);
+    exit(0);    
+end
+
+if length(ARGS) < 3
+    help_func();
+end
+
+
+for i in eachindex(ARGS)
+    if i == 1 && !startswith( ARGS[i], "--" )
+        global startfile = ARGS[i];
+    elseif i == 2  && !startswith( ARGS[i], "--" )
+        global buckyCFfile = ARGS[i];
+    elseif i == 3  && !startswith( ARGS[i], "--" )
+        global batches = ARGS[i];
+    elseif ARGS[i] == "--h_max"
+        global h_max = parse(Int, ARGS[i+1]);
+    elseif ARGS[i] == "--n_epochs"
+        global n_epochs = parse(Int, ARGS[i+1]);
+    elseif ARGS[i] == "--tk"
+        global tk = parse(Float64, ARGS[i+1]);
+    elseif ARGS[i] == "--seed"
+        global seed = parse(Int, ARGS[i+1]);
+    elseif ARGS[i] == "--nruns"
+        global nruns = parse(Int, ARGS[i+1]);
+    elseif ARGS[i] == "--Nfail"
+        global Nfail = parse(Int, ARGS[i+1]);
+    elseif ARGS[i] == "--prefix"
+        global prefix = ARGS[i+1];
+    elseif ARGS[i] == "--ncores"
+        global ncores = parse(Int, ARGS[i+1]);
+    elseif ARGS[i] == "--help" || ARGS[i] == "-h"
+        help_func();
+    end
+end
+
+if startfile == "" || buckyCFfile == "" || batches == ""
+    help_func();
+end
+
+# println("startfile: ", startfile);
+# println("buckyCFfile: ", buckyCFfile);
+# println("batches: ", batches);
+# println("h_max: ", h_max);
+# println("n_epochs: ", n_epochs);
+# println("tk: ", tk);
+# println("seed: ", seed);
+# println("nruns: ", nruns);
+# println("Nfail: ", Nfail);
+# println("prefix: ", prefix);
+# println("ncores: ", ncores)
+
+
+using Distributed;
 using CSV;
 using DataFrames;
 using Random;
 using Distributed;
+
+addprocs(ncores)
 @everywhere using PhyloNetworks;
+
 
 function checkconvergence(all_liks, l_k)
     l_best_abs = maximum(abs.(all_liks));
@@ -76,17 +184,17 @@ function main(startfile, buckyCFfile, batches,
         if epoch > 1
             tk = 0.98 * tk;
         end
-        for batch in all_batches[1:end-1]
-            println("Processing batch ", i, " epoch ", epoch)
+        for batch in all_batches
             i += 1
+            println("Processing batch ", i, " epoch ", epoch)
 
             # batch = all_batches[i]
     
             idx = [parse(Int, j) for j in split(batch, ",")];
             CT_k = readTableCF(CT[idx, :]);
             try
-                # oldstd = stdout
-                # redirect_stdout(devnull)
+                oldstd = stdout
+                redirect_stdout(devnull)
                 net_k = snaq!(N_prev, CT_k,
                     hmax=h_max,
                     filename="", 
@@ -95,7 +203,7 @@ function main(startfile, buckyCFfile, batches,
                     Nfail=Nfail,
                     seed=seed, 
                     );
-                # redirect_stdout(oldstd) # recover original stdout
+                redirect_stdout(oldstd) # recover original stdout
             catch
                 println("Error in ", batch);
                 push!(error_at, N_prev);
@@ -170,101 +278,6 @@ function main(startfile, buckyCFfile, batches,
         end
     end
 end
-
-
-
-# make default values for the arguments
-startfile = "";
-buckyCFfile = "";
-batches = "";
-
-h_max = 1;
-n_epochs = 1;
-tk = Inf;
-seed = 12038;
-nruns = 10;
-Nfail = 75;
-prefix = "NetInference";
-
-
-function help_func()
-    # make a help message
-    help_message = """
-
-        Infer phylogenetic networks from batches of the Concordance Factors (CFs) 
-        using a simulated annealing algorithm. This algorithm uses the SNaQ algorithm
-        and warm starts.
-
-    Usage: $(PROGRAM_FILE) startfile CFfile batches 
-            --h_max h_max --n_epochs n_epochs --tk tk --seed seed
-            --nruns nruns --Nfail Nfail --prefix prefix 
-
-    Required arguments:
-        startfile: str; path to the file with the starting network.
-        CFfile: str; path to the file with the CFs
-        batches: str; path to the file with the batches
-
-    Optional arguments:
-        --h_max h_max: int; maximum number of hybridizations. (default: $h_max)
-        --n_epochs n_epochs: int; number of epochs. (default: $n_epochs)
-        --tk tk: float; temperature. Inf temperature
-            accepts all suboptimal moves. Lower than Inf
-            a probability of accepting a suboptimal move is
-            calculated. (default: $tk)
-        --seed seed: int; seed for the random number generator. (default: $seed)
-        --nruns nruns: int; number of runs. (default: $nruns)
-        --Nfail Nfail: int; number of failures. (default: $Nfail)
-        --prefix prefix: str; prefix for the output files. (default: $prefix)
-    """;
-    println(help_message);
-    exit(0);    
-end
-
-if length(ARGS) < 3
-    help_func();
-end
-
-
-for i in eachindex(ARGS)
-    if i == 1 && !startswith( ARGS[i], "--" )
-        global startfile = ARGS[i];
-    elseif i == 2  && !startswith( ARGS[i], "--" )
-        global buckyCFfile = ARGS[i];
-    elseif i == 3  && !startswith( ARGS[i], "--" )
-        global batches = ARGS[i];
-    elseif ARGS[i] == "--h_max"
-        global h_max = parse(Int, ARGS[i+1]);
-    elseif ARGS[i] == "--n_epochs"
-        global n_epochs = parse(Int, ARGS[i+1]);
-    elseif ARGS[i] == "--tk"
-        global tk = parse(Float64, ARGS[i+1]);
-    elseif ARGS[i] == "--seed"
-        global seed = parse(Int, ARGS[i+1]);
-    elseif ARGS[i] == "--nruns"
-        global nruns = parse(Int, ARGS[i+1]);
-    elseif ARGS[i] == "--Nfail"
-        global Nfail = parse(Int, ARGS[i+1]);
-    elseif ARGS[i] == "--prefix"
-        global prefix = ARGS[i+1];
-    elseif ARGS[i] == "--help" || ARGS[i] == "-h"
-        help_func();
-    end
-end
-
-if startfile == "" || buckyCFfile == "" || batches == ""
-    help_func();
-end
-
-# println("startfile: ", startfile);
-# println("buckyCFfile: ", buckyCFfile);
-# println("batches: ", batches);
-# println("h_max: ", h_max);
-# println("n_epochs: ", n_epochs);
-# println("tk: ", tk);
-# println("seed: ", seed);
-# println("nruns: ", nruns);
-# println("Nfail: ", Nfail);
-# println("prefix: ", prefix);
 
 @time main(startfile, buckyCFfile, batches, h_max, n_epochs, tk, seed, nruns, Nfail, prefix);
 
