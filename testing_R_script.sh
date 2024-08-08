@@ -4,11 +4,14 @@
 # print(ncores)
 # print(max_iter)
 
-# it is at lab imac
-Rscript --vanilla sim_networks_v2.R 15 ./test_sims test 15 500
+
+./scripts/sim_networks_v2.R 15 --out_path ./test_data/test_sims --prefix test --ncores 10 --max_iter 500
 
 # quartets outfile [sim. networks]
-julia -p 15 estimate_qlls_v2.jl 1_seqgen.CFs_n15.csv test_sims/test_n15_qll.csv test_sims/test2*.txt
+# julia -p 15 ./scripts/estimate_qlls_v2.jl ./test_data/1_seqgen.CFs_n15.csv ./test_data/test_n15_qll.csv ./test_data/test_sims/test2*.txt
+
+./scripts/estimate_qlls_v2.jl ./test_data/1_seqgen.CFs_n15.csv ./test_data/test_sims/test2*.txt\
+                                  --ncores 10 --outfile ./test_data/test_n15_qll.csv
 
 
 ./path_subsampling.py test_sims/test_n15_qll.csv 1_seqgen.CFs_n15.csv\
