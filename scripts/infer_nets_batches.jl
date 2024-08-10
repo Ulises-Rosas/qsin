@@ -104,10 +104,10 @@ end
 # println("prefix: ", prefix);
 # println("ncores: ", ncores)
 
-
+using Suppressor;
 using Distributed;
 using CSV;
-using DataFrames;
+@suppress using DataFrames;
 using Random;
 using Distributed;
 
@@ -239,7 +239,7 @@ function main(startfile, buckyCFfile, batches,
     
                 => it is a minimization problem              
                 """
-                println("\nAccepted with negative energy ", dE, "\n");
+                println("\nOptimal move: Accepted with likelihood diff. ", abs(dE), "\n");
                 N_prev = deepcopy(net_k);
                 checkconvergence(all_liks, l_k);
 
@@ -253,7 +253,7 @@ function main(startfile, buckyCFfile, batches,
                 p = exp(-dE/tk);
                 println("\np =  ", p, "");
                 if xi <= p
-                    println("\nAccepted with probability ", p, "\n");
+                    println("\nSuboptimal move: Accepted with probability ", p, "\n");
                     N_prev = deepcopy(net_k);
                     checkconvergence(all_liks, l_k);
 

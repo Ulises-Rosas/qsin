@@ -74,10 +74,12 @@ end
 # println("outfile: ", outfile);
 # println("ncores: ", ncores);
 
+using Suppressor;
 
 addprocs(ncores)
 
-@everywhere using CSV, DataFrames;
+@everywhere using CSV;
+@suppress @everywhere using DataFrames;
 @everywhere using PhyloNetworks;
 
 @everywhere function QuartetCounts(ngenes, df_long)
