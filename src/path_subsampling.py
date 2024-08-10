@@ -6,9 +6,9 @@ import numpy as np
 import argparse
 
 
-from sparse_solutions import ElasticNet, lasso_path, rmse
-from sparse_solutions import max_lambda, _scaler
-from isle_path import split_data_isle, get_new_path
+from qsin.sparse_solutions import ElasticNet, lasso_path, rmse
+from qsin.sparse_solutions import max_lambda, _scaler
+from qsin.isle_path import split_data_isle, get_new_path
 
 def write_batches(outfile, batches):
 

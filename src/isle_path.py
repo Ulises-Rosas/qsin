@@ -4,7 +4,7 @@ import numpy as np
 from copy import deepcopy
 
 
-from sparse_solutions import split_data
+from qsin.sparse_solutions import split_data
 from sklearn.tree import DecisionTreeRegressor
 
 def Sm(X, y, f_m, sample_size, replace = False, seed = 12038):

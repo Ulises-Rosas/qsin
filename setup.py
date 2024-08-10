@@ -18,7 +18,7 @@ with open('README.md') as readme_file:
     readme = readme_file.read()
 
 setup(name = "qsin",
-      version = '0.1',
+      version = '0.2',
       maintainer = 'Ulises Rosas',
       packages = ['qsin'],
       package_dir = {'qsin': 'src'},
@@ -26,14 +26,17 @@ setup(name = "qsin",
       include_package_data=True,
       install_requires = dependencies,
       zip_safe = False,
-    #   entry_points = {
-    #     'console_scripts': [
-    #         'ggpy   = ggpy.cli:main'
-    #         ]
-    #   },
-    #   scripts=[
-    #       './scripts/root_groups.py',
-    #   ],
+      entry_points = {
+        'console_scripts': [
+            'path_subsampling.py   = qsin.path_subsampling:main'
+            ]
+      },
+      scripts=[
+          './scripts/infer_qlls.jl',
+          './scripts/sim_nets.R',
+          './scripts/infer_nets_batches.jl',
+          # './src/path_subsampling.py'
+      ],
       classifiers = [
           'Programming Language :: Python :: 3'
       ]

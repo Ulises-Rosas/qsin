@@ -3,17 +3,6 @@
 using Distributed;
 
 
-# # path = "/Users/ulises/Desktop/ABL/comps/claudia/UnderstandingNetworks/n6_sims"
-
-# if length(ARGS) < 3
-#     println("Usage: julia estimate_qlls_v2.jl quartets outfile [sim. networks]")
-#     exit(1)
-# else
-
-#     @time simlated_QLL(ARGS[3:end], ARGS[1], ARGS[2])
-# end
-# julia ./scripts/estimate_qlls_v2.jl ./test_data/1_seqgen.CFs_n15.csv ./test_data/test_n15_qll.csv ./test_data/test_sims/test2*.txt
-
 CFfile = "";
 nets = [];
 outfile = "qlls.csv";
@@ -207,14 +196,5 @@ function simlated_QLL(networks, buckyCFfile, outputfile)
 
 end
 
-# # path = "/Users/ulises/Desktop/ABL/comps/claudia/UnderstandingNetworks/n6_sims"
-
-# if length(ARGS) < 3
-#     println("Usage: julia estimate_qlls_v2.jl quartets outfile [sim. networks]")
-#     exit(1)
-# else
-
-#     @time simlated_QLL(ARGS[3:end], ARGS[1], ARGS[2])
-# end
 
 @time simlated_QLL(nets, CFfile, outfile)
