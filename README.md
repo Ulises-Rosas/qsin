@@ -8,7 +8,7 @@ These two currently available options for installing `qsin` use the files `envir
 
 ```bash
 # construct the environment
-conda env create -f environment.yml
+conda env create -f environment.yml -y
 conda activate qsin
 # install julia and r dependencies at qsin
 ./build.sh 
@@ -18,7 +18,7 @@ conda activate qsin
 
 ```bash
 # construct the environment
-mamba env create -f environment.yml
+mamba env create -f environment.yml  -y
 conda activate qsin
 # install julia and r dependencies at qsin
 ./build.sh

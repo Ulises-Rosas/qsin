@@ -1,0 +1,13 @@
+name: qsin
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python >=3.6
+  - julia
+  - r-base
+  - r-ape
+  - pip
+  - pip:
+    - qsin
