@@ -6,7 +6,8 @@ VERSION = `python3 setup.py --version`
 all: dist_dir upload
 
 dist_dir:
-	python3 setup.py sdist bdist_wheel
+	# python3 setup.py sdist bdist_wheel
+	python3 -m build .
 
 upload:
 	twine upload dist/*
