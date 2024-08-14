@@ -1,0 +1,125 @@
+{% set name = "qsin_deps" %}
+{% set version = "0.5" %}
+
+{% set posix = 'm2-' if win else '' %}
+{% set native = 'm2w64-' if win else '' %}
+
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  - url: {{ cran_mirror }}/src/contrib/SiPhyNetwork_1.1.0.tar.gz
+    sha256: 97ba3624869c2972ca4d72cf8a5b697f3c7cddd23b06b5a2963267fbb507e586
+    folder: r_dep
+
+  - url: file:///Users/ulisesrosas/Desktop/qsin/dist/qsin-0.3.tar.gz
+    sha256: 694fabc9423fd8bba53c7a250e8de9908cbc5a76ac7aee53cbeee4d7cbe97a8e
+    folder: py_dep
+    
+build:
+  merge_build_host: True  # [win]
+  entry_points:
+    - path_subsampling.py   = qsin.path_subsampling:main
+  # script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+
+  number: 0
+
+  # This is required to make R link correctly on Linux.
+  rpaths:
+    - lib/R/lib/
+    - lib/
+
+requirements:
+  build:
+    - {{ compiler('c') }}              # [not win]
+    - {{ compiler('m2w64_c') }}        # [win]
+    - {{ compiler('cxx') }}            # [not win]
+    - {{ compiler('m2w64_cxx') }}      # [win]
+    - {{ posix }}filesystem        # [win]
+    - {{ posix }}make
+    - {{ posix }}sed               # [win]
+    - {{ posix }}coreutils         # [win]
+    - {{ posix }}zip               # [win]
+
+  host:
+    - python
+    - pip
+    - julia 
+    - r-base >=3.5
+    - r-rcpp
+    - r-ape
+    - r-lifecycle
+    - r-rstackdeque
+
+  run:
+    - python
+    - numpy
+    - numba
+    - scikit-learn
+    - julia
+    - r-base >=3.5
+    - {{native}}gcc-libs         # [win]    
+    - r-ape
+    - r-rcpp    
+    - r-lifecycle
+    - r-rstackdeque
+
+
+test:
+  imports:
+    - qsin
+  commands:
+    - pip check
+    - path_subsampling.py --help
+    - $R -e "library('SiPhyNetwork')"           # [not win]
+    - "\"%R%\" -e \"library('SiPhyNetwork')\""  # [win]    
+  requires:
+    - pip
+
+about:
+  license_family: GPL3
+  license_file:
+    - '{{ environ["PREFIX"] }}/lib/R/share/licenses/GPL-3'
+
+
+extra:
+  recipe-maintainers:
+    - Ulises-Rosas
+
+
+
+# package:
+#   name: qsin4
+#   version: "1.0.0"
+
+# source:
+#   path: .
+
+# build:
+#   skip: true  # [win]
+#   number: 2
+#   binary_relocation: false
+
+# requirements:
+
+#   build:
+#     - julia 
+#     - python >=3.8
+
+#   run:
+#      - julia 
+#      - python >=3.8
+
+# test:
+#   commands:
+#     - julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
+#     - julia -e 'using Suppressor;'
+#   requires:
+#     - perl
+
+
+# about:
+#   license: MIT
+#   summary: "A simple Conda package"
