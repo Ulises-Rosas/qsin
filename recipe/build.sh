@@ -32,14 +32,7 @@ ls -lhtr
 ${PYTHON} -m pip install . -vv --no-deps --no-build-isolation
 ls -lhtr
 
-
-
-
-
-
-# #!/bin/bash
-
-
+# # cd ../jl_dep
 # export JULIA_DEPOT_PATH_BACKUP=${JULIA_DEPOT_PATH:-}
 # export JULIA_PROJECT_BACKUP=${JULIA_PROJECT:-}
 # export JULIA_LOAD_PATH_BACKUP=${JULIA_LOAD_PATH:-}
@@ -58,6 +51,8 @@ ls -lhtr
 # export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 
 # julia -e 'using Pkg; Pkg.add("Suppressor")'
-# # Rscript -e 'install.packages("SiPhyNetwork", repos="https://cloud.r-project.org")'
-
+# # ls -lhtr
+# cp -r $CONDA_PREFIX/share/julia $SRC_DIR
+# cd $SRC_DIR
+# ls -lhtr
 

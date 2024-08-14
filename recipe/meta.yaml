@@ -14,17 +14,20 @@ source:
     sha256: 97ba3624869c2972ca4d72cf8a5b697f3c7cddd23b06b5a2963267fbb507e586
     folder: r_dep
 
-  - url: file:///Users/ulisesrosas/Desktop/qsin/dist/qsin-0.3.tar.gz
-    sha256: 694fabc9423fd8bba53c7a250e8de9908cbc5a76ac7aee53cbeee4d7cbe97a8e
+  - url: https://pypi.io/packages/source/q/qsin/qsin-0.4.tar.gz
+    sha256: 95cc7016be9a8a0be6751cc53c92dae501e72f8b3ce91ae36be7dd1fe0ec4611
     folder: py_dep
+
+  # - git_url: https://github.com/JuliaIO/Suppressor.jl.git
+  #   git_tag: v0.2.7
+  #   folder: jl_dep
     
 build:
   merge_build_host: True  # [win]
   entry_points:
     - path_subsampling.py   = qsin.path_subsampling:main
-  # script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
-
   number: 0
+  # binary_relocation: False
 
   # This is required to make R link correctly on Linux.
   rpaths:
