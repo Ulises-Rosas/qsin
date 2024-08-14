@@ -2,16 +2,18 @@ name: qsin
 
 channels:
   - conda-forge
+  - urosas
 
 dependencies:
-  - python >=3.6
-  - numpy
-  - numba
-  - scikit-learn  
-  - julia
-  - r-base
-  - r-ape
-  - r-lifecycle
-  - pip
-  - pip:
-    - qsin
+  - qsin_deps
+  # - python >=3.6
+  # - numpy
+  # - numba
+  # - scikit-learn  
+  # - julia
+  # - r-base
+  # - r-ape
+  # - r-lifecycle
+  # - pip
+  # - pip:
+  #   - qsin
