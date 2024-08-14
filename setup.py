@@ -18,7 +18,7 @@ with open('README.md') as readme_file:
     readme = readme_file.read()
 
 setup(name = "qsin",
-      version = '0.3',
+      version = '0.4',
       maintainer = 'Ulises Rosas',
       packages = ['qsin'],
       package_dir = {'qsin': 'src'},
