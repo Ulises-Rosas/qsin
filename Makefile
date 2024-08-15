@@ -14,3 +14,7 @@ upload:
 	rm -rf dist
 	rm -rf build
 	rm -rf $(NAME).egg-info
+
+clean_test:
+	rm ./test_data/test_sims/*.txt
+	rm linear_overlapped_*.txt
