@@ -26,7 +26,7 @@ function help_func()
         and warm starts.
 
         Notice that if you give a single batch and 1 epoch, then you will have the 
-        phylogenetic networks for that batch using the starting tree when the the
+        phylogenetic networks for that batch using the starting tree when the
         default parameters are set.
 
     Usage: $(PROGRAM_FILE) startfile CFfile batches 
