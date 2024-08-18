@@ -6,9 +6,10 @@ import numpy as np
 import argparse
 
 
-from qsin.sparse_solutions import ElasticNet, lasso_path, rmse
-from qsin.sparse_solutions import max_lambda, _scaler
-from qsin.isle_path import split_data_isle, get_new_path
+from sparse_solutions import ElasticNet, lasso_path
+from utils import  calculate_test_errors, max_lambda, _scaler
+from isle_path import split_data_isle, get_new_path
+from ElasticNetCV import ElasticNetCV_alpha
 
 def write_batches(outfile, batches):
 
@@ -130,51 +131,6 @@ def select_path(path, CT_spps, test_errors, n_spps = 15, factor = 1/2, inbetween
     return new_batches
 
 
-def calculate_test_errors(args, path, params, X_test, y_test):
-    """
-    Calculate the test errors for each lambda value in the path
-
-    Parameters
-    ----------
-    args : argparse.Namespace
-        Arguments from the command line
-
-    path : numpy.ndarray
-        The path of coefficients
-
-    params : dict
-        Parameters for the path
-
-    X_test : numpy.ndarray
-        The test data
-
-    y_test : numpy.ndarray
-        The test response
-
-    Returns
-    -------
-    numpy.ndarray
-        The test errors, which is a 2D array with the first column
-        indicating the lambda value and the second column indicating
-        the RMSE value
-
-    """
-    if args.nwerror:
-        test_errors = None
-    else:
-        test_errors = np.zeros((path.shape[1], 2))
-        for j in range(path.shape[1]):
-            beta_j = path[:, j]
-            rmse_j = rmse(y_test, X_test, beta_j)
-            test_errors[j, :] = [params['lam'][j], rmse_j]
-
-        np.savetxt(args.prefix + "_testErrors.csv",
-                    test_errors,
-                    delimiter=',',
-                    comments='')
-    return test_errors
-
-
 def main():
     parser = argparse.ArgumentParser(description="""
     Generate batches from ElasticNet path.
@@ -191,13 +147,13 @@ def main():
     opt_args.add_argument("--version", action="version", version="%(prog)s 1.0")
     opt_args.add_argument("--verbose", action="store_true", help="Whether to print verbose output.")
     opt_args.add_argument("--isle", action="store_true", help="Whether to use path from decision tree-based ISLE (i.e., ensemble learning).")
-    opt_args.add_argument("--p_test", type=float, default=0.35, metavar="", help="Proportion of samples to use for testing.")
+    opt_args.add_argument("--p_test", type=float, default=0.35, metavar="", help="Proportion of observations to use for testing.")
     opt_args.add_argument("--seed", type=int, default=12038, metavar="", help="Random seed.")
     
 
 
     isle_args = parser.add_argument_group("ISLE parameters (if --isle is used)")
-    isle_args.add_argument("--eta", type=float, default=0.5, metavar="", help="Proportion of samples to use in each tree.")
+    isle_args.add_argument("--eta", type=float, default=0.5, metavar="", help="Proportion of observations to use in each tree.")
     isle_args.add_argument("--nu", type=float, default=0.1, metavar="", help="Learning rate.")
     isle_args.add_argument("--M", type=int, default=500, metavar="", help="Number of trees in the ensemble.")
     isle_args.add_argument("--max_depth", type=int, default=2, metavar="", help="Maximum depth of the decision tree.")
@@ -208,7 +164,7 @@ def main():
                            at https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeRegressor.html.""")
 
     elnet_args = parser.add_argument_group("Elastic Net parameters")
-    elnet_args.add_argument("--alpha", type=float, default=0.999, metavar="", help="Alpha value controling l1 and l2 norm balance in ElasticNet.")
+    elnet_args.add_argument("--alpha", type=float, nargs='+', default=[0.999], metavar="", help="Alpha value controling l1 and l2 norm balance in ElasticNet.")
     elnet_args.add_argument("--e", type=float, default=1e-4,metavar="", help="Epsilon value, which is used to calculate the minimum lambda (i.e., min_lambda =  max_lambda * e).")
     elnet_args.add_argument("--K", type=int, default=100, metavar="",help="Number of lambda values to test between max_lambda and min_lambda. ")
     elnet_args.add_argument("--tol", type=float, default=0.00001,metavar="", help="Tolerance for convergence.")
@@ -216,6 +172,9 @@ def main():
     elnet_args.add_argument("--nwerror", action="store_true",  help="Not write test RMSE error for every lambda used in the path.")
     elnet_args.add_argument("--wpath", action="store_true",  help="Write ElasticNet path. Warning: This can be large.")
     elnet_args.add_argument("--nstdy", action="store_true", help="Not standardize y. Standarizing y helps to numerical stability. ")
+    elnet_args.add_argument("--cv", action="store_true", help="Use cross-validation to select the best lambda and alpha value.")
+    elnet_args.add_argument("--folds", type=int, default=5, metavar="", help="Number of folds for cross-validation when cv is True.")
+    elnet_args.add_argument("--ncores", type=int, default=1, metavar="", help="Number of cores to use for cross-validation.")
 
 
     batch_args = parser.add_argument_group("Batch selection parameters")
@@ -228,6 +187,23 @@ def main():
     args = parser.parse_args()
     # print(args)
 
+    assert args.factor >= 0 and args.factor <= 1, "Factor must be between 0 and 1."
+    assert args.inbetween >= 0, "Inbetween must be greater or equal to 0."
+    assert args.window >= 1, "Window must be greater or equal to 1."
+    assert args.p_test > 0 and args.p_test < 1, "Proportion of test samples must be between 0 and 1."
+    assert args.e > 0, "Epsilon must be greater than 0."
+    assert args.K > 0, "K must be greater than 0."
+    assert args.tol > 0, "Tolerance must be greater than 0."
+    assert args.max_iter > 0, "Maximum number of iterations must be greater than 0."
+    assert args.seed >= 0, "Seed must be greater or equal to 0."
+    assert args.M > 0, "Number of trees in the ensemble must be greater than 0."
+    assert args.max_depth > 0, "Maximum depth of the decision tree must be greater than 0."
+    assert args.max_features > 0 and args.max_features <= 1, "Maximum proportion of features must be between 0 and 1."
+    assert args.eta > 0 and args.eta <= 1, "Proportion of observations to use in each tree must be between 0 and 1."
+    assert args.nu >= 0 and args.nu <= 1, "Learning rate must be between 0 and 1."
+    assert args.prefix != "", "Prefix must not be empty."
+
+
     data = np.loadtxt(args.Xy_file, delimiter=',', skiprows=1)
     X, y = data[:, :-1], data[:, -1]
     n,p = X.shape
@@ -236,6 +212,8 @@ def main():
     y = _scaler(y, y, sted = False if args.nstdy else True)
 
     num_test = int(n*args.p_test)
+
+    start = time.time()
 
     (X_train,X_test,
      y_train,y_test,
@@ -247,18 +225,39 @@ def main():
             eta=args.eta, nu=args.nu, M=args.M,
             verbose=args.verbose)
 
-    max_lam = max_lambda(X_train, y_train, alpha=args.alpha)
+    all_max_lams = [max_lambda(X_train, y_train, alpha=a) for a in args.alpha]
+    if args.verbose:
+        print("Max lambda(s): ", all_max_lams)
+    
+    max_lam = np.max(all_max_lams)
     min_lam = max_lam * args.e
     params = {'lam': np.logspace(np.log10(min_lam), np.log10(max_lam), args.K, endpoint=True)[::-1]}
+
+    assert all([a > 0 and a <= 1 for a in args.alpha]), "Alpha values must be between 0 and 1."
+    if len(args.alpha) > 1:
+        assert args.cv, "If alpha is a list, then cv must be True."
+
+        # do cross-validation
+        args.alpha = ElasticNetCV_alpha(args, X_train, y_train,
+                                        args.alpha, params,
+                                        args.folds, args.ncores)
+
+    else:
+        assert not args.cv, "If alpha is a single value, then cv must be False."
+        args.alpha = args.alpha[0]
+            
+    # else:
+    #     assert not args.cv, "If cv is true, then alpha must be a list."
+    #     assert args.alpha > 0 and args.alpha <= 1, "Alpha must be between 0 and 1."
 
     model = ElasticNet(fit_intercept=False, 
                         max_iter=args.max_iter,
                         init_iter=1, 
                         copyX=True, 
                         alpha=args.alpha, 
-                        tol=args.tol)
+                        tol=args.tol, seed = args.seed)
 
-    start = time.time()
+
     path = lasso_path(X_train, y_train, params, model, sequential_screening=False)
     end_lasso = time.time() - start
 
