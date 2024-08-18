@@ -1,4 +1,3 @@
-import time
 import random
 import numpy as np
 
@@ -15,32 +14,8 @@ def sparse_XB(X, B):
 # sparse_XB = lambda X, B: np.matmul(X, B)
 
 
-
-np.random.seed(123)
-random.seed(123)
-
-def _scaler(ref, dat, sted = True):
-    u = np.mean(ref, axis=0)
-    
-    cred = dat - u
-
-    if sted:
-        sd = np.std(ref, axis=0)
-        cred = cred / sd
-
-    return cred
-
-def max_lambda(X, y, alpha = None):
-    # 1/n * max( |X^T * y| )
-    # SLS book page 114
-    n,_ = X.shape
-
-    if alpha is not None:
-        c1 = 2 / (alpha * n)
-    else:
-        c1 = 2 / n
-
-    return c1 * np.max( np.abs( np.matmul(X.T, y) ) )
+# np.random.seed(123)
+# random.seed(123)
 
 # standarize data
 def std_data(X):
@@ -49,8 +24,6 @@ def std_data(X):
 def mse(y, X, B):
     return np.mean( ( y - X.dot(B) )**2 ) 
 
-def rmse(y, X, B):
-    return np.sqrt( np.mean( ( y - X.dot(B) )**2 ) )
 
 @njit
 def msoft_threshold( delta, lam, denom):
@@ -256,13 +229,16 @@ class Lasso:
                 #  beta = None,
                  tol = 0.001,
                  init_iter = 1,
-                 copyX = False, **kwargs):
+                 copyX = False,
+                 seed = 123,
+                 **kwargs):
         
         self.max_iter = max_iter
         self.lam = lam
         self.prev_lam = prev_lam
         self.tol = tol
         self.warm_start = warm_start
+        self.seed = seed
 
         self.fit_intercept = fit_intercept
         
@@ -387,6 +363,7 @@ class Lasso:
             # He-styled 
             # initialization 
             # of the coefficients
+            np.random.seed(self.seed)
             self.beta = np.random.normal(0, np.sqrt(2/p), size=p) 
          
         # few iterations of coordinate descent
