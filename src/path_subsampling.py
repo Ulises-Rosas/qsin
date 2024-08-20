@@ -187,7 +187,7 @@ def main():
     args = parser.parse_args()
     # print(args)
 
-    assert args.factor >= 0 and args.factor <= 1, "Factor must be between 0 and 1."
+    # assert args.factor >= -1 and args.factor <= 1, "Factor must be between 0 and 1."
     assert args.inbetween >= 0, "Inbetween must be greater or equal to 0."
     assert args.window >= 1, "Window must be greater or equal to 1."
     assert args.p_test > 0 and args.p_test < 1, "Proportion of test samples must be between 0 and 1."
