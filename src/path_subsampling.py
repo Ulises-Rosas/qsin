@@ -6,10 +6,10 @@ import numpy as np
 import argparse
 
 
-from sparse_solutions import ElasticNet, lasso_path
-from utils import  calculate_test_errors, max_lambda, _scaler
-from isle_path import split_data_isle, get_new_path
-from ElasticNetCV import ElasticNetCV_alpha
+from qsin.sparse_solutions import ElasticNet, lasso_path
+from qsin.utils import  calculate_test_errors, max_lambda, _scaler
+from qsin.isle_path import split_data_isle, get_new_path
+from qsin.ElasticNetCV import ElasticNetCV_alpha
 
 def write_batches(outfile, batches):
 
