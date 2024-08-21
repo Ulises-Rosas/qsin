@@ -9,7 +9,7 @@ julia -e 'using Pkg, Suppressor; println("Installing DataFrames"); @suppress Pkg
 
 # julia -e 'using Pkg, Suppressor; println("Installing PhyloNetworks"); @suppress Pkg.add("PhyloNetworks")'
 
-pip install qsin
+pip install qsin -U
 
 echo
 echo -e "\033[7;32""m qsin installation complete \033[0m"
