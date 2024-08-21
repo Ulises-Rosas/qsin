@@ -112,7 +112,7 @@ using Random;
 using Distributed;
 
 addprocs(ncores)
-@everywhere using PhyloNetworks;
+@suppress @everywhere using PhyloNetworks;
 
 
 function checkconvergence(all_liks, l_k)
