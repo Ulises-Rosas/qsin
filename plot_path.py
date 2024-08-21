@@ -7,7 +7,7 @@ elnet_path  = np.loadtxt("./test_data/linear_batches_elnetPath.csv", delimiter='
 # errors_path = np.loadtxt("./test_data/non_linear_batches_testErrors.csv", delimiter=',')
 # elnet_path  = np.loadtxt("./test_data/non_linear_batches_elnetPath.csv", delimiter=',')
 fs = 18
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 7))
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 6))
 
 ax1.plot(elnet_path[:,0], elnet_path[:,1:], marker='o', alpha=0.8)
 ax1.set_xscale('log')
@@ -23,5 +23,5 @@ ax2.set_ylabel('RMSE', fontsize=fs)
 ax2.set_title('Test Error', fontsize=fs)
 plt.tight_layout()
 # save the figure
-plt.savefig('./imgs/linear_batches_elnetPath.png', dpi=300)
+plt.savefig('./imgs/linear_batches_elnetPath.png', dpi=200)
 
