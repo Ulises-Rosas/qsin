@@ -18,5 +18,4 @@ plot(ori_net[1], showgamma=true);
 R"mtext"("Full data network (15 rows)")
 plot(qsin_net[1], showgamma=true);
 R"mtext"("Half data network (8 rows)")
-# save plot
 R"dev.off()";
