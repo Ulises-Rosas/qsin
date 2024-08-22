@@ -22,28 +22,6 @@ conda activate qsin
 # install julia dependencies at qsin
 ./build.sh
 ```
-## Installation
-
-The installation currently works for Linux and MacOS only. The two currently available options for installing `qsin` use the files `environment.yml` and `build.sh`, which are located among this repository files.
-#### Option 1: Using conda
-
-```bash
-# construct the environment
-conda env create -f environment.yml
-conda activate qsin
-# install julia dependencies at qsin
-./build.sh 
-```
-
-#### Option 2: Using Mamba
-
-```bash
-# construct the environment
-mamba env create -f environment.yml
-conda activate qsin
-# install julia dependencies at qsin
-./build.sh
-```
 
 ### Option 3: Manual Installation
 
