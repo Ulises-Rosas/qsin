@@ -23,7 +23,7 @@ conda activate qsin
 ./build.sh
 ```
 
-### Option 3: Manual Installation
+#### Option 3: Manual Installation
 
 For this it requires that you have `julia`, `R` and `python` installed in your system. You can install the dependencies for `julia` by running the following command in the Julia console:
 
