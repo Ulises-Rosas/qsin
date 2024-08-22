@@ -22,7 +22,48 @@ conda activate qsin
 # install julia dependencies at qsin
 ./build.sh
 ```
+## Installation
 
+The installation currently works for Linux and MacOS only. The two currently available options for installing `qsin` use the files `environment.yml` and `build.sh`, which are located among this repository files.
+#### Option 1: Using conda
+
+```bash
+# construct the environment
+conda env create -f environment.yml
+conda activate qsin
+# install julia dependencies at qsin
+./build.sh 
+```
+
+#### Option 2: Using Mamba
+
+```bash
+# construct the environment
+mamba env create -f environment.yml
+conda activate qsin
+# install julia dependencies at qsin
+./build.sh
+```
+
+### Option 3: Manual Installation
+
+For this it requires that you have `julia`, `R` and `python` installed in your system. You can install the dependencies for `julia` by running the following command in the Julia console:
+
+```julia
+using Pkg
+Pkg.add("CSV"); Pkg.add("DataFrames"); Pkg.add("PhyloNetworks"); Pkg.add("Suppressor")
+```
+You can install the dependencies for `R` by running the following command in the R console:
+
+```R
+install.packages("SiPhyNetwork")
+```
+
+You can install the dependencies for `python` by running the following command in the terminal:
+
+```bash
+pip install qsin
+```
 
 ## Overview: A minimal example
 
