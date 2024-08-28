@@ -146,7 +146,7 @@ Nfail: int
 """
 function main(startfile, buckyCFfile, batches, 
     h_max = 2, n_epochs = 1, tk = 1000, seed = 120,
-    nruns = 1, Nfail = 6, prefix = "./test_sims/disjointInference")
+    nruns = 10, Nfail = 6, prefix = "./test_sims/disjointInference")
     
     # startfile = "/Users/ulises/Desktop/SLL/SparseQuartets copy/1_seqgen.QMC_n15.tre";
     # buckyCFfile = "/Users/ulises/Desktop/SLL/SparseQuartets copy/1_seqgen.CFs_n15.csv";
