@@ -180,7 +180,7 @@ def main():
     batch_args = parser.add_argument_group("Batch selection parameters")
     batch_args.add_argument("--prefix", type=str, default='batches', metavar="", help="Prefix for output files.")
     batch_args.add_argument("--factor", type=float, default=1/2, metavar="", help="Reduction factor for selecting overlapped batches. If -1 and nwerror is False, then the batch with the minimum RMSE is selected.")
-    batch_args.add_argument("--inbetween", type=float, default=5, metavar="",help="Number of in-between batches for selecting overlapped batches.")
+    batch_args.add_argument("--inbetween", type=int, default=5, metavar="",help="Number of in-between batches for selecting overlapped batches.")
     batch_args.add_argument("--window", type=int, default=1,metavar="", help="Window size for agglomerating disjoint batches. With the current there is no agglomeration.")
     
 
