@@ -1,13 +1,103 @@
 #!/usr/bin/env julia
 
-
+using  CSV;
 using  Suppressor;
-@suppress using PhyloNetworks;
+@suppress using PhyloNetworks, DataFrames;
 
 main_net = "";
 nets = [];
 outfile = "diffs.txt";
 root = "1";
+
+
+function root_exist(net, net_file, root, verbose = false)
+
+    if root in [i.name for i in net.leaf]
+        return true
+    
+    else
+        if verbose
+            println("$root taxa is not at $net_file")
+        end
+
+        return false
+    end
+    
+end
+
+
+function get_dist(target_net, target_file, net_file, root);
+
+    if ~root_exist(target_net, target_file, root, true)
+        # println("next time it will be better")
+        return error("Root taxa is not at $main_net")
+    end
+
+    rootatnode!(target_net, root);
+
+    tmp_net = readInputTrees(net_file)[1];    
+    if ~root_exist(tmp_net, net_file, root, true)
+        return error("Root taxa is not at $net_file")
+    end
+
+    rootatnode!(tmp_net, root)
+    # dist = hardwiredClusterDistance(target_net, tmp_net, true);
+    return hardwiredClusterDistance(target_net, tmp_net, true);
+end
+
+function root_and_dist(all_taxa, target_net, target_file,net_file, root, verbose)
+
+    while true
+        try
+            my_dist = get_dist(target_net, target_file, net_file, root);
+
+            if verbose
+                println("Root: ", root);
+                println("Distances: ", my_dist);
+            end
+            
+            return my_dist, root;
+
+        catch e
+            # choose randomdly a new root
+            root = all_taxa[rand(1:end)];
+
+            if verbose
+                println(e);
+                println("New root (randomdly chosen): ", root);
+            end
+
+            filter!(e->e ≠ root, all_taxa);
+    
+            if length(all_taxa) == 0
+                return error("No more taxa to choose from");
+            end
+
+        end
+
+    end
+end
+
+
+function main(target_file, root, net_files, outfile)
+
+    target_net = readInputTrees(target_file)[1];
+
+    all_taxa = [i.name for i in target_net.leaf];
+    filter!(e->e ≠ root, all_taxa);
+    
+    all_dists = [];
+    for net_file in net_files
+        copied_taxa = copy(all_taxa);
+        tmp_dist, tmp_root = root_and_dist(copied_taxa, target_net, target_file, net_file, root, true);
+        
+        # # get base name
+        out_name = basename(net_file);
+        push!(all_dists, [out_name, tmp_dist, tmp_root]);
+    end
+    println(all_dists)
+    # CSV.write(outfile, DataFrame(all_dists), writeheader=false);
+end
 
 
 function help_func()
@@ -74,56 +164,18 @@ println("nets : ", nets);
 println("outfile: ", outfile);
 println("root: ", root);
 
-function root_exist(net, net_file, root, verbose = false)
-
-    if root in [i.name for i in net.leaf]
-        return true
-    
-    else
-        if verbose
-            println("$root taxa is not at $net_file")
-        end
-
-        return false
-    end
-    
-end
+# main_net = "./test_data/full_data_net6.txt";
+# root = "3";
+# # net_file = "./test_data/n6/n6_lin_boot2_row8_nets.txt";
+# net_files = ["./test_data/n6/n6_lin_boot1_row1_nets.txt", "./test_data/n6/n6_lin_boot1_row2_nets.txt", "./test_data/n6/n6_lin_boot1_row3_nets.txt", "./test_data/n6/n6_lin_boot1_row4_nets.txt", "./test_data/n6/n6_lin_boot1_row5_nets.txt", "./test_data/n6/n6_lin_boot1_row6_nets.txt", "./test_data/n6/n6_lin_boot1_row7_nets.txt", "./test_data/n6/n6_lin_boot1_row8_nets.txt"];
+# nets = net_files;
+@time main(main_net, root, nets, outfile);
 
 
-
-function main(main_net, other_nets, root, outfile);
-
-    target_net = readInputTrees(main_net)[1];
-    if ~root_exist(target_net, main_net, root, true)
-        # println("next time it will be better")
-        return 1
-    end
-
-    rootatnode!(target_net, root);
-
-    distances = [];
-    for net_file in other_nets
-
-        tmp_net = readInputTrees(net_file)[1];
-        if ~root_exist(tmp_net, net_file, root, true)
-            continue
-        end
-        rootatnode!(tmp_net, root)
-        
-        dist = hardwiredClusterDistance(target_net, tmp_net, true);
-        push!(distances, dist);
-    end
-
-    println(distances)
-    return distances
-end
-
-
-@time main(main_net, nets, root, outfile);
 
 """
-./compare_nets.jl ../full_data_net6.txt\
-                  ../n6/n6_lin_boot1_row*_nets.txt\
+./test_data/analysis/compare_nets.jl ./test_data/full_data_net6.txt\
+                  ./test_data/n6/n6_lin_boot1_row*_nets.txt\
                   --root 1
 """
 
