@@ -1,8 +1,7 @@
 #!/usr/bin/env julia
 
-using  CSV;
-using  Suppressor;
-@suppress using PhyloNetworks, DataFrames;
+using  DelimitedFiles;
+@suppress using PhyloNetworks;
 
 main_net = "";
 nets = [];
@@ -93,9 +92,13 @@ function main(target_file, root, net_files, outfile)
         
         # # get base name
         out_name = basename(net_file);
-        push!(all_dists, [out_name, tmp_dist, tmp_root]);
+        row = match(r".*_row([0-9]+)_.*", out_name)[1];
+        boot =  match(r".*_boot([0-9]+)_.*", out_name)[1];
+
+        push!(all_dists, [row, boot, tmp_dist, tmp_root]);
     end
     println(all_dists)
+    writedlm(outfile, all_dists, ',');
     # CSV.write(outfile, DataFrame(all_dists), writeheader=false);
 end
 
@@ -171,8 +174,16 @@ println("root: ", root);
 # nets = net_files;
 @time main(main_net, root, nets, outfile);
 
+# all_dists = [];
+# for i in eachindex(nets)
+#     base_name = basename(nets[i]);
+#     row = match(r".*_row([0-9]+)_.*", base_name);
+#     boot =  match(r".*_boot([0-9]+)_.*", base_name);
+#     push!(all_dists, [boot[1], row[1]]);
+# end
+# writedlm(outfile, all_dists, ',');
 
-
+#TODO: test it out. It should work with the following command
 """
 ./test_data/analysis/compare_nets.jl ./test_data/full_data_net6.txt\
                   ./test_data/n6/n6_lin_boot1_row*_nets.txt\
