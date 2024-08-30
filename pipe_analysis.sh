@@ -25,7 +25,7 @@ infer_qlls.jl $CT_file\
 
 path_subsampling.py ./test_data/n6/test_qll_n6.csv\
         $CT_file\
-        --wpath --verbose --e 1e-2 --factor 0.90 --inbetween 10\
+        --wpath --verbose --e 1e-2 --factor 0.90 --inbetween 100\
         --prefix ./test_data/n6/linear_batches\
         --cv --alpha 0.5 0.95 0.99 1 --ncores $ncores --folds $nfolds
 
