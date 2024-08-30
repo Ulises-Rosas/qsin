@@ -1,6 +1,7 @@
 #!/usr/bin/env julia
 
 using  DelimitedFiles;
+using  Suppressor;
 @suppress using PhyloNetworks;
 
 main_net = "";
