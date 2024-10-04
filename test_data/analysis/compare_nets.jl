@@ -70,7 +70,9 @@ function root_and_dist(all_taxa, target_net, target_file,net_file, root, verbose
             filter!(e->e ≠ root, all_taxa);
     
             if length(all_taxa) == 0
-                return error("No more taxa to choose from");
+                println("No more taxa to choose from");
+                return NaN, NaN;
+                # return error("No more taxa to choose from");
             end
 
         end
@@ -149,8 +151,8 @@ for i in eachindex(ARGS)
         if ARGS[i] == "--root"
             global root =  ARGS[i+1];
 
-        elseif  ARGS[i] == "--outputfile"
-            global outputfile = ARGS[i+1];
+        elseif  ARGS[i] == "--outfile"
+            global outfile = ARGS[i+1];
 
         elseif ARGS[i] == "--help" || ARGS[i] == "-h"
             help_func();
@@ -168,10 +170,9 @@ println("nets : ", nets);
 println("outfile: ", outfile);
 println("root: ", root);
 
-# main_net = "./test_data/full_data_net6.txt";
-# root = "3";
-# # net_file = "./test_data/n6/n6_lin_boot2_row8_nets.txt";
-# net_files = ["./test_data/n6/n6_lin_boot1_row1_nets.txt", "./test_data/n6/n6_lin_boot1_row2_nets.txt", "./test_data/n6/n6_lin_boot1_row3_nets.txt", "./test_data/n6/n6_lin_boot1_row4_nets.txt", "./test_data/n6/n6_lin_boot1_row5_nets.txt", "./test_data/n6/n6_lin_boot1_row6_nets.txt", "./test_data/n6/n6_lin_boot1_row7_nets.txt", "./test_data/n6/n6_lin_boot1_row8_nets.txt"];
+# main_net = " ./test_data/full_data_net15.txt";
+# root = "14";
+# net_files = ["./test_data/n15/non_linear/n15_nl_boot6_row1_nets.txt", "./test_data/n15/non_linear/n15_nl_boot1_row1_nets.txt"];
 # nets = net_files;
 @time main(main_net, root, nets, outfile);
 

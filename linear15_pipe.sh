@@ -14,7 +14,8 @@ nfolds=5
 h_max=2
 ntaxa=15
 nsims=1000
-prefix="n15"
+prefix="n15_linear"
+prefix2="linear_5e-4"
 
 CT_file="./test_data/1_seqgen.CFs_n15.csv"
 init_tree="./test_data/1_seqgen.QMC_n15.tre"
@@ -29,19 +30,17 @@ init_tree="./test_data/1_seqgen.QMC_n15.tre"
 #               --outfile ./test_data/$prefix/test_qll_$prefix.csv
 
 
-path_subsampling.py ./test_data/$prefix/test_qll_$prefix.csv\
+path_subsampling.py ./test_data/$prefix/test_qll_n15.csv\
         $CT_file\
-        --wpath --verbose --e 1e-4 --factor -1 --inbetween 10\
-        --isle\
-        --prefix ./test_data/$prefix/nonlinear\
+        --wpath --verbose --e 5e-4 --factor -1 --inbetween 5\
+        --prefix ./test_data/$prefix/$prefix2\
         --cv --alpha 0.5 0.95 0.99 1\
         --ncores $ncores --folds $nfolds
 
+cat ./test_data/$prefix/$prefix2"_overlappedBatches.txt" | uniq > ./test_data/$prefix/$prefix2"_overlappedBatches_uniq.txt" 
+nrows=$(cat ./test_data/$prefix/$prefix2"_overlappedBatches_uniq.txt" | wc -l)
 
-cat ./test_data/$prefix/nonlinear_overlappedBatches_isle.txt | uniq > ./test_data/$prefix/nonlinear_overlappedBatches_uniq.txt 
-nrows=$(cat ./test_data/$prefix/nonlinear_overlappedBatches_uniq.txt | wc -l)
-
-boostraps=10
+boostraps=15
 for i in $(seq 1 $boostraps)
 do     
      for j in $(seq 1 $nrows)
@@ -51,14 +50,16 @@ do
           echo "Bootstrap $i, row $j"
           echo "Seed: $seed"
 
-          awk "NR==$j" ./test_data/$prefix/nonlinear_overlappedBatches_uniq.txt > "./test_data/$prefix/nlbo_$j.txt"
+          awk "NR==$j" ./test_data/$prefix/$prefix2"_overlappedBatches_uniq.txt" > ./test_data/$prefix/$prefix2"_row"$j".txt"
           
-          ./scripts/infer_nets_batches.jl $init_tree\
+          infer_nets_batches.jl $init_tree\
                     $CT_file\
-                    "./test_data/$prefix/nlbo_$j.txt"\
+                    ./test_data/$prefix/$prefix2"_row"$j".txt"\
                     --h_max $h_max\
-                    --prefix "./test_data/$prefix/n15_nl_boot"$i"_row"$j \
+                    --prefix ./test_data/$prefix/$prefix2"_boot"$i"_row"$j \
                     --ncores $ncores\
                     --seed $seed
      done
-done > ./test_data/$prefix/$prefix"_nl_nets.log"
+done > ./test_data/$prefix/$prefix2"_nets.log"
+
+
