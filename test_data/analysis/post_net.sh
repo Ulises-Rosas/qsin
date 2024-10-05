@@ -19,21 +19,21 @@
 # conda activate  /Users/ulisesrosas/miniconda3/envs/qsin 
 
 full_data="./test_data/full_data_net15.txt"
-inferd_nets_loc="/Users/ulisesrosas/Desktop/qsin/test_data/n15/n15_depth4_tmp"
-log_file=$inferd_nets_loc/nonlinear_depth4_nets_15more.log
+inferd_nets_loc="/Users/ulisesrosas/Desktop/qsin/test_data/n15_depth3_v0.9_n0.5"
+log_file=$inferd_nets_loc/nonlinear_depth3_nu0.9_nets_15more.log
 
 ./test_data/analysis/compare_nets.jl $full_data\
                   $inferd_nets_loc/*_nets.txt\
-                  --outfile $inferd_nets_loc/compared_nets_depth3_30boots.csv\
+                  --outfile $inferd_nets_loc/compared_nets_n15_depth3_v0.9_n0.5.csv\
                   --root 15
 
 ./test_data/analysis/process_time.py $log_file\
-                  -o $inferd_nets_loc/processed_time_nonlinear.csv
+                  -o $inferd_nets_loc/processed_time_n15_depth3_v0.9_n0.5.csv
 
 
-echo $inferd_nets_loc/compared_nets_depth3_30boots.csv
+ls $inferd_nets_loc/compared_nets_n15_depth3_v0.9_n0.5.csv
 ls $inferd_nets_loc/*uniq.txt
-echo $inferd_nets_loc/processed_time_nonlinear.csv
+ls $inferd_nets_loc/processed_time_n15_depth3_v0.9_n0.5.csv
 
 
 
