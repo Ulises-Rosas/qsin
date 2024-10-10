@@ -35,7 +35,10 @@ def main(log_file, out_file):
     with open(out_file, 'w') as f:
         f.write("bootstrap,row,time\n")
         for i in range(0, len(all_lines), 3):
-            f.write(f"{all_lines[i]},{all_lines[i+1]},{all_lines[i+2]}\n")
+            try:
+                f.write(f"{all_lines[i]},{all_lines[i+1]},{all_lines[i+2]}\n")
+            except IndexError:
+                continue
 
 
 def parse_args():
