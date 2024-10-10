@@ -241,6 +241,14 @@ def main():
         args.alpha = ElasticNetCV_alpha(args, X_train, y_train,
                                         args.alpha, params,
                                         args.folds, args.ncores)
+        
+        max_lam = max_lambda(X_train, y_train, alpha=args.alpha)
+        min_lam = max_lam * args.e
+
+        if args.verbose:
+            print("Lambda range: ", min_lam, max_lam)
+
+        params = {'lam': np.logspace(np.log10(min_lam), np.log10(max_lam), args.K, endpoint=True)[::-1]}
 
     else:
         assert not args.cv, "If alpha is a single value, then cv must be False."

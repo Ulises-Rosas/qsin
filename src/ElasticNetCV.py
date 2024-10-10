@@ -158,9 +158,9 @@ def ElasticNetCV_alpha(args, X_train, y_train, alphas,
      min_rmse) = get_best_params(all_errors, alphas, params)
 
     if args.verbose:
-        print("best alpha: ", best_alpha)
-        print("best lambda: ", best_lam)
-        print("min RMSE: ", min_rmse)
+        print("CV best alpha: ", best_alpha)
+        print("CV best lambda: ", best_lam)
+        print("CV min RMSE: ", min_rmse)
 
     return best_alpha
 
