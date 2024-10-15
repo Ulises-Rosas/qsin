@@ -1,6 +1,10 @@
 
 full_data="./test_data/full_data_net15.txt"
-inferd_nets_loc="/Users/ulises/Desktop/ABL/software/qsin/test_data/n15_non_linear_oscer"
+# inferd_nets_loc="/Users/ulisesrosas/Desktop/qsin/test_data/n15_depth3_v0.9_n0.5"
+# inferd_nets_loc="/Users/ulisesrosas/Desktop/qsin/test_data/n15_linear"
+inferd_nets_loc="/Users/ulisesrosas/Desktop/qsin/test_data/n15_depth3_v0.9_n0.9_all"
+# inferd_nets_loc="/Users/ulisesrosas/Desktop/qsin/test_data/n15/n15_depth4_tmp"
+
 
 log_file=$(ls $inferd_nets_loc/*.log)
 
@@ -10,8 +14,8 @@ inferd_nets_loc_base=$(basename $inferd_nets_loc)
 ./test_data/analysis/compare_nets.jl $full_data\
                   $inferd_nets_loc/*_nets.txt\
                   --outfile $inferd_nets_loc/compared_nets_$inferd_nets_loc_base.csv\
-                  --root 12
-# 12, 9 
+                  --root 12 --thresh 0.1
+
 ./test_data/analysis/process_time.py $log_file\
                   -o $inferd_nets_loc/processed_time_$inferd_nets_loc_base.csv
 

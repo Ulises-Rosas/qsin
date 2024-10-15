@@ -8,6 +8,7 @@ main_net = "";
 nets = [];
 outfile = "diffs.txt";
 root = "1";
+thresh = 0.0;
 
 
 function root_exist(net, net_file, root, verbose = false)
@@ -26,13 +27,15 @@ function root_exist(net, net_file, root, verbose = false)
 end
 
 
-function get_dist(target_net, target_file, net_file, root);
+function get_dist(target_net, target_file, net_file, root, thresh);
 
     if ~root_exist(target_net, target_file, root, true)
         # println("next time it will be better")
         return error("Root taxa is not at $main_net")
     end
 
+    # thresh = 0.1;
+    deleteHybridThreshold!(target_net, thresh);
     rootatnode!(target_net, root);
 
     tmp_net = readInputTrees(net_file)[1];    
@@ -40,16 +43,17 @@ function get_dist(target_net, target_file, net_file, root);
         return error("Root taxa is not at $net_file")
     end
 
+    deleteHybridThreshold!(tmp_net, thresh);
     rootatnode!(tmp_net, root)
-    # dist = hardwiredClusterDistance(target_net, tmp_net, true);
+
     return hardwiredClusterDistance(target_net, tmp_net, true);
 end
 
-function root_and_dist(all_taxa, target_net, target_file,net_file, root, verbose)
+function root_and_dist(all_taxa, target_net, target_file,net_file, root, thresh, verbose)
 
     while true
         try
-            my_dist = get_dist(target_net, target_file, net_file, root);
+            my_dist = get_dist(target_net, target_file, net_file, root, thresh);
 
             if verbose
                 println("Root: ", root);
@@ -81,7 +85,7 @@ function root_and_dist(all_taxa, target_net, target_file,net_file, root, verbose
 end
 
 
-function main(target_file, root, net_files, outfile)
+function main(target_file, root, thresh, net_files, outfile)
 
     target_net = readInputTrees(target_file)[1];
 
@@ -91,7 +95,7 @@ function main(target_file, root, net_files, outfile)
     all_dists = [];
     for net_file in net_files
         copied_taxa = copy(all_taxa);
-        tmp_dist, tmp_root = root_and_dist(copied_taxa, target_net, target_file, net_file, root, true);
+        tmp_dist, tmp_root = root_and_dist(copied_taxa, target_net, target_file, net_file, root, thresh, true);
         
         # # get base name
         out_name = basename(net_file);
@@ -123,6 +127,8 @@ function help_func()
     Optional arguments:
         --outfile outfile: str; output file name. (default: $outfile)
         --root root: int; root for all nets. (default: $root)
+        --thresh thresh: float; threshold for hybrid nodes. (default: $thresh)
+        --help, -h: show this help message
 """;
     println(help_message);
     exit(0);    
@@ -151,6 +157,9 @@ for i in eachindex(ARGS)
         if ARGS[i] == "--root"
             global root =  ARGS[i+1];
 
+        elseif ARGS[i] == "--thresh"
+            global thresh =  parse(Float64, ARGS[i+1]);
+
         elseif  ARGS[i] == "--outfile"
             global outfile = ARGS[i+1];
 
@@ -169,21 +178,10 @@ println("main_net: ", main_net);
 println("nets : ", nets);
 println("outfile: ", outfile);
 println("root: ", root);
+println("thresh: ", thresh);
 
-# main_net = " ./test_data/full_data_net15.txt";
-# root = "14";
-# net_files = ["./test_data/n15/non_linear/n15_nl_boot6_row1_nets.txt", "./test_data/n15/non_linear/n15_nl_boot1_row1_nets.txt"];
-# nets = net_files;
-@time main(main_net, root, nets, outfile);
 
-# all_dists = [];
-# for i in eachindex(nets)
-#     base_name = basename(nets[i]);
-#     row = match(r".*_row([0-9]+)_.*", base_name);
-#     boot =  match(r".*_boot([0-9]+)_.*", base_name);
-#     push!(all_dists, [boot[1], row[1]]);
-# end
-# writedlm(outfile, all_dists, ',');
+@time main(main_net, root, thresh, nets, outfile);
 
 #TODO: test it out. It should work with the following command
 """
@@ -191,178 +189,3 @@ println("root: ", root);
                   ./test_data/n6/n6_lin_boot1_row*_nets.txt\
                   --root 1
 """
-
-
-# if length(ARGS) >= 2
-
-#     # net_file = "/Users/ulises/Desktop/SLL/SparseQuartets/just_networks.txt";
-#     # root = "1";
-
-#     net_file = ARGS[1];
-#     root = ARGS[2];
-
-#     outfile = replace(net_file, ".txt" => "_distances_root_$root.csv");
-
-
-#     # read target_net
-#     networks = readInputTrees(net_file);
-#     # get the first element of the array
-
-#     target_net = networks[1];
-
-
-#     rootatnode!(target_net, root);
-    
-
-
-#     # R"par"(mar=[0,0,0,0]); # to reduce margins (no margins at all here)
-#     # plot(target_net, showgamma=true);
-
-
-#     distances = [];
-#     for net in networks[2:end]
-#         # println(tipLabels(net));
-        
-#         rootatnode!(net, root);
-#         dist = hardwiredClusterDistance(target_net, net, true);
-#         push!(distances, dist);
-#     end
-
-#     CSV.write(outfile, DataFrame(distances=distances), writeheader=false);
-
-# else
-#     println("Usage: estimate_network.jl network_file root_node");
-
-# end
-
-
-
-
-
-# using Suppressor;
-
-# addprocs(ncores)
-
-# @everywhere using CSV;
-# @suppress @everywhere using DataFrames;
-# @everywhere using PhyloNetworks;
-
-# @everywhere function QuartetCounts(ngenes, df_long)
-#     """
-#     ngenes: number of genes
-#     df_long: dataframe after using fittedQuartetCF with :long
-#     df_long[:,6] is the observed probability of the quartet
-#     """
-#     return repeat(ngenes, inner = 3) .* df_long[:,6]
-# end
-
-# @everywhere function std_loglik(ngenes, df_long)
-#     """
-#     standard log-likelihood
-
-#     ngenes: number of genes
-#     df_long: dataframe after using fittedQuartetCF with :long
-#     df_long[:,7] is the expected probability of the quartet
-
-#     From the documentation:
-#     "if long, the output has one row per quartet,
-#     i.e. 3 rows per 4-taxon sets, and *7 columns*:
-#     4 columns for the taxon names, one column to give 
-#     the quartet resolution, one column for the 
-#     observed CF and the *last column for 
-#     the expected CF."
-
-#     """
-#     QC = QuartetCounts(ngenes, df_long)
-#     return sum( QC .* log.( df_long[:,7] ) )
-# end
-
-# @everywhere function spps_code(df)
-#     # make rows to collapse in a string in a
-#     code_spps = []
-#     quartets = unique(df)
-#     for i in 1:size(quartets,1)
-#         # collapse all columns in a string
-#         tmp_code = join(quartets[i,:], ".")
-#         push!(code_spps, tmp_code)
-#     end
-    
-#     return code_spps
-# end
-
-
-
-# @everywhere function QLL(ngenes, df_long)
-#     """
-#     quartet log-likelihood
-
-#     ngenes: number of genes
-#     df_long: dataframe after using fittedQuartetCF with :long
-#     """
-#     QC = QuartetCounts(ngenes, df_long)
-#     all_qlls = QC .* log.( df_long[:,7] )
-    
-#     # loop that takes 3 rows at a time of all_qlls
-#     qlls = []
-#     for i in 1:3:size(all_qlls,1)
-#         push!(qlls, sum(all_qlls[i:i+2]))
-#     end
-    
-#     return qlls
-# end
-
-# @everywhere function iter_df(ngenes, df_long)
-    
-#     qll = QLL(ngenes, df_long)
-#     spps = spps_code(df_long[:, 1:4])
-
-#     push!(qll, sum(qll))
-#     push!(spps, "sum")
-
-#     return DataFrame(qll', spps)
-# end
-
-
-# function simlated_QLL(networks, buckyCFfile, outputfile)
-
-#     # buckyCFfile = "/Users/ulises/Desktop/SLL/SparseQuartets/1_seqgen.CFs_n15.csv"
-#     # netfile = "/Users/ulises/Desktop/ABL/comps/claudia/UnderstandingNetworks/n15_sim_v2/test_500.txt"
-#     # netfile2 = "/Users/ulises/Desktop/ABL/comps/claudia/UnderstandingNetworks/n15_sim_v2/test_499.txt"
-#     # networks = [ netfile2, netfile]
-
-#     @everywhere function process_network(netfile, all_buckyCF, dat)
-#         netstart = readTopology(netfile)
-#         try
-#             topologyQPseudolik!(netstart, all_buckyCF)
-#             df_long = fittedQuartetCF(all_buckyCF, :long)
-#             return iter_df(dat.ngenes, df_long)
-#         catch
-#             println("Error in ", netfile)
-#             return DataFrame()
-#         end
-#     end
-
-#     function simlated_QLL(networks, buckyCFfile, outputfile)
-#         # buckyCFfile = "/Users/ulises/Desktop/SLL/SparseQuartets/1_seqgen.CFs_n15.csv"
-#         all_buckyCF = readTableCF(buckyCFfile)
-#         dat = DataFrame(CSV.File(buckyCFfile); copycols=false)
-
-#         main_df = @distributed (vcat) for netfile in networks
-#             println(netfile)
-
-#             dat_tmp = deepcopy(dat)
-#             all_buckyCF_tmp = deepcopy(all_buckyCF)
-#             process_network(netfile, all_buckyCF_tmp, dat_tmp)
-
-#             # process_network(netfile, all_buckyCF, dat)
-#         end
-#         CSV.write(outputfile, main_df)
-#     end
-
-#     simlated_QLL(networks, buckyCFfile, outputfile)
-
-# end
-
-
-# @time simlated_QLL(nets, CFfile, outfile)
-
