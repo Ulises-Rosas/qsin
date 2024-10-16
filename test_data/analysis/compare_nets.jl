@@ -35,7 +35,7 @@ function get_dist(target_net, target_file, net_file, root, thresh);
     end
 
     # thresh = 0.1;
-    deleteHybridThreshold!(target_net, thresh);
+    # deleteHybridThreshold!(target_net, thresh);
     rootatnode!(target_net, root);
 
     tmp_net = readInputTrees(net_file)[1];    
@@ -87,22 +87,42 @@ end
 
 function main(target_file, root, thresh, net_files, outfile)
 
-    target_net = readInputTrees(target_file)[1];
+    # target_net = readInputTrees(target_file)[1];
+    true_nets = readInputTrees(target_file);
 
-    all_taxa = [i.name for i in target_net.leaf];
+    all_taxa = [i.name for i in true_nets[1].leaf];
+    # println("All taxa: ", all_taxa);
     filter!(e->e ≠ root, all_taxa);
     
     all_dists = [];
     for net_file in net_files
-        copied_taxa = copy(all_taxa);
-        tmp_dist, tmp_root = root_and_dist(copied_taxa, target_net, target_file, net_file, root, thresh, true);
+
+        best_tmp_dist = Inf;
+        best_tmp_root = NaN;
+        for target_net in true_nets
+            copied_taxa = copy(all_taxa);
+            # target_net = true_nets[i];
+            # println("target_net: ", target_net);
+
+            tmp_dist, tmp_root = root_and_dist(copied_taxa, target_net, target_file, net_file, root, thresh, false);
+            if !isnan(tmp_dist) && tmp_dist < best_tmp_dist
+                best_tmp_dist = tmp_dist;
+                best_tmp_root = tmp_root;
+            end
+        end
+
+        if best_tmp_dist == Inf
+            best_tmp_dist = NaN;
+        end
+                
+        # tmp_dist, tmp_root = root_and_dist(copied_taxa, target_net, target_file, net_file, root, thresh, true);
         
         # # get base name
         out_name = basename(net_file);
         row = match(r".*_row([0-9]+)_.*", out_name)[1];
         boot =  match(r".*_boot([0-9]+)_.*", out_name)[1];
 
-        push!(all_dists, [row, boot, tmp_dist, tmp_root]);
+        push!(all_dists, [row, boot, best_tmp_dist, best_tmp_root]);
     end
     println(all_dists)
     writedlm(outfile, all_dists, ',');
