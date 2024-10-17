@@ -62,13 +62,18 @@ GeomFlatViolin <- ggproto("GeomFlatViolin", Geom,
 
 
 
-file = '/Users/ulisesrosas/Desktop/qsin/test_data/n15_depth3_v0.9_n0.9_all/compared_nets_n15_depth3_v0.9_n0.9_all.csv'
-combs_file = '/Users/ulisesrosas/Desktop/qsin/test_data/n15_depth3_v0.9_n0.9_all/n15_depth3_v0.9_n0.9_overlappedBatches_uniq.txt'
-time_file ='/Users/ulisesrosas/Desktop/qsin/test_data/n15_depth3_v0.9_n0.9_all/processed_time_n15_depth3_v0.9_n0.9_all.csv'
-pseudo_file ='/Users/ulisesrosas/Desktop/qsin/test_data/n15_depth3_v0.9_n0.9_all/processed_pseudo_n15_depth3_v0.9_n0.9_all.csv'
 
-is_linear = F
+file = '/Users/ulises/Desktop/ABL/software/experiments_qsin/n15_linear_1e-4_all/compared_nets_n15_linear_1e-4_all.csv'
+combs_file = '/Users/ulises/Desktop/ABL/software/experiments_qsin/n15_linear_1e-4_all/linear_5e-4_overlappedBatches_uniq.txt'
+time_file ='/Users/ulises/Desktop/ABL/software/experiments_qsin/n15_linear_1e-4_all/processed_time_n15_linear_1e-4_all.csv'
+pseudo_file ='/Users/ulises/Desktop/ABL/software/experiments_qsin/n15_linear_1e-4_all/processed_pseudo_n15_linear_1e-4_all.csv'
 
+
+
+
+is_linear = T
+is_random = F
+is_n6 = F
 
 
 pseudo_liks <- read.csv(pseudo_file)
@@ -88,12 +93,16 @@ df_time = read.csv(time_file) %>%
 
 if (is_linear){
   msubtitle_d = paste('Elastic Net,', starts, 'random starts')
+  
+}else if(is_random){
+  msubtitle_d = paste('Random,', starts, 'random starts')
 }else{
   msubtitle_d = paste('ISLE,', starts, 'random starts')
 }
 
 
-max_time = 14827.94
+
+
 CT_combs <- read.csv(combs_file, sep = "\t", header = F) 
 
 lapply(CT_combs$V1, function (x){ length(strsplit(x =  x, split = ",")[[1]]) }) %>%
@@ -133,8 +142,10 @@ lapply(test_rows, function(r){
 df$CT_row_count <- factor(df$CT_row_count, levels = sort(unique(df$CT_row_count)))
 df <- df[!is.na(df$dist),]
 
-df[df$row == 1,]
+# my_table <- table(df[df$row == 5,'dist'])
+# my_table/sum(my_table)
 
+# df <- df %>% dplyr::filter(row < 6)
 
 df %>%
   ggplot(data = ., aes(x = CT_row_count
@@ -162,11 +173,20 @@ df %>%
 # nboots <- length(unique(df$boot))
 
 
+if(is_n6){
+  aes_y = "time"
+  myy_label = "Seconds"
+  max_time = 57
+  
+}else{
+  aes_y = "time/60/60"
+  myy_label = "Hours"
+  max_time = 14827.94/60/60
+}
 
 df %>%
   ggplot(data = ., 
-         aes(x = CT_row_count,
-             y = time/60/60)) +
+         aes_string(x = "CT_row_count", y = aes_y)) +
   geom_point(aes(colour = rel_likdev), position = position_jitter(width = 0.10), size = 1, alpha = 0.5, )+
   scale_colour_gradient(low = "blue", high = "red")+
   geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0, position = position_nudge(x = 0, y = 0)) +
@@ -174,13 +194,13 @@ df %>%
   theme_bw(base_size = 12) +
   labs(title="Running time",
        subtitle = msubtitle_d,
-       y ="Hours", x = "Rows in CT")+
+       y =myy_label, x = "Rows in CT")+
   theme(legend.position="none") +
-  geom_hline(yintercept=max_time/60/60, linetype="dashed", color = "red")  -> time_plot
+  geom_hline(yintercept=max_time, linetype="dashed", color = "red")  -> time_plot
 
 
 # pdf(
-#   file = '../../ABL/software/qsin/test_data/n15_depth3_v0.9_n0.5/dist_time_nonlinear.pdf',
+#   file = '/Users/ulises/Desktop/ABL/software/experiments_qsin/n15_linear_1e-4_all/dist_time_linear_1e-4_v2.pdf',
 #   width = 6,height = 5
 #     )
 plot_grid(
@@ -189,8 +209,7 @@ plot_grid(
   ncol = 1,
   align = "v"
 )
-
-lapply(unique(df$row), function(x) wilcox.test(jitter(df[df$row ==x,]$dist)  )$p.value)
-
+# dev.off()
 
 
+# lapply(unique(df$row), function(x) wilcox.test(jitter(df[df$row ==x,]$dist))$p.value)
