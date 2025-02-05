@@ -797,63 +797,63 @@ def lasso_path(X_train, y_train, params, model,
 
     return path
 
-def myenet_path(X_train, y_train, X_test, y_test, params, model, 
-               sequential_screening = True,
-               alpha = 0.5):
-    """
-    compute the lasso path based on the training set
-    and  with errors based on the test set
-    """
-    # model = Lasso()
-    # X = X_train
-    # y = y_train
-    # params = {'lam': np.logspace(-2, max_lambda(X,y), 3)}
+# def myenet_path(X_train, y_train, X_test, y_test, params, model, 
+#                sequential_screening = True,
+#                alpha = 0.5):
+#     """
+#     compute the lasso path based on the training set
+#     and  with errors based on the test set
+#     """
+#     # model = Lasso()
+#     # X = X_train
+#     # y = y_train
+#     # params = {'lam': np.logspace(-2, max_lambda(X,y), 3)}
 
-    if X_test is None and y_test is None:
-        X_test = X_train
-        y_test = y_train
+#     if X_test is None and y_test is None:
+#         X_test = X_train
+#         y_test = y_train
 
 
-    _,p = X_train.shape
-    lams = params['lam']
+#     _,p = X_train.shape
+#     lams = params['lam']
 
-    errors = np.zeros(len(lams))
-    path = np.ones((p, len(params['lam'])))
-    y_train_enet = np.concatenate((y_train, np.zeros(p)))
+#     errors = np.zeros(len(lams))
+#     path = np.ones((p, len(params['lam'])))
+#     y_train_enet = np.concatenate((y_train, np.zeros(p)))
 
-    all_gammas = np.zeros(len(lams))
-    for i,lam in enumerate(lams):
-        # i = 0
-        # lam = lams[i]
-        alfa = lam * alpha
-        beta = lam * (1 - alpha)
-        sf = (1 + beta) ** (-1/2)
-        gamma = alfa * sf
-        all_gammas[i] = gamma
+#     all_gammas = np.zeros(len(lams))
+#     for i,lam in enumerate(lams):
+#         # i = 0
+#         # lam = lams[i]
+#         alfa = lam * alpha
+#         beta = lam * (1 - alpha)
+#         sf = (1 + beta) ** (-1/2)
+#         gamma = alfa * sf
+#         all_gammas[i] = gamma
 
-        if i > 1:
-            if sequential_screening:
-                prev_lam = all_gammas[i-1]
+#         if i > 1:
+#             if sequential_screening:
+#                 prev_lam = all_gammas[i-1]
 
-            else:
-                prev_lam = None
+#             else:
+#                 prev_lam = None
 
-            model.set_params(lam = gamma,
-                             warm_start = True, 
-                             beta = model.beta,
-                             prev_lam = prev_lam)
+#             model.set_params(lam = gamma,
+#                              warm_start = True, 
+#                              beta = model.beta,
+#                              prev_lam = prev_lam)
             
-        else:
+#         else:
 
-            model.set_params(lam=gamma)
-            # model.warm_start
+#             model.set_params(lam=gamma)
+#             # model.warm_start
 
-        X_train_enet =  np.vstack([X_train, np.sqrt(beta) * np.eye(p)])
-        model.fit(X_train_enet, y_train_enet)
-        errors[i] = None
-        path[:,i] = model.beta*sf
+#         X_train_enet =  np.vstack([X_train, np.sqrt(beta) * np.eye(p)])
+#         model.fit(X_train_enet, y_train_enet)
+#         errors[i] = None
+#         path[:,i] = model.beta*sf
 
-    return path, all_gammas
+#     return path, all_gammas
 
 def theta(path_i):
 

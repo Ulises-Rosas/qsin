@@ -255,6 +255,8 @@ def main():
     if args.isle:
         # re-scale for ISLE. This is necessary because the ISLE
         # assumes there is an intercept term in the model
+        if args.verbose:
+            print("Re-centering data for ISLE")
         X_test, X_train = re_center_for_isle(X_test, X_train)
 
 
