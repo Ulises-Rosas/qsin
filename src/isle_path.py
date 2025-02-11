@@ -26,7 +26,7 @@ def make_isle_ensemble(X_train, y_train, model, eta, nu, M, seed = 12038, verbos
     F_train = np.zeros((n_train,M))
     # F_test = np.zeros((n_test,M))
 
-    rs = [np.random.choice(range(seed)) for _ in range(M)]
+    rs = [seed + i for i in range(M)]
     estimators = []
 
     train_sample_size = int(n_train*eta)
@@ -50,11 +50,12 @@ def make_isle_ensemble(X_train, y_train, model, eta, nu, M, seed = 12038, verbos
 
     return F_train, estimators
 
-def make_init_model(max_features = None, max_depth = 5, param_file = None):
+def make_init_model(max_features = None, max_depth = 5, max_leaves = 6, param_file = None):
 
     if param_file is None:
         return DecisionTreeRegressor(max_features = max_features, 
-                                     max_depth = max_depth,)
+                                     max_depth = max_depth, 
+                                     max_leaf_nodes = max_leaves)
     
     else:
         # read json file
@@ -64,6 +65,7 @@ def make_init_model(max_features = None, max_depth = 5, param_file = None):
 
         return DecisionTreeRegressor(max_features = max_features,
                                      max_depth = max_depth,
+                                     max_leaf_nodes = max_leaves
                                      **params)
 
 def make_F_test(X_test, estimators):
@@ -76,7 +78,7 @@ def make_F_test(X_test, estimators):
 
 def split_data_isle(X, y, num_test, seed, 
                     isle=True, nwerror=False, 
-                    mx_p=1/2, max_depth=5, param_file=None, 
+                    mx_p=1/2, max_depth=5, param_file=None, max_leaves=6,
                     eta=0.5, nu=0.1, M=100,
                     verbose=True):
     
@@ -101,6 +103,8 @@ def split_data_isle(X, y, num_test, seed,
         Maximum proportion of features to use in each tree.
     max_depth : int
         Maximum depth of the decision tree.
+    max_leaves : int
+        Maximum number of leaves in the decision tree.
     param_file : str
         JSON file with parameters for the decision tree.
     eta : float
@@ -132,7 +136,7 @@ def split_data_isle(X, y, num_test, seed,
 
     if isle:
         n, p = X_train.shape
-        model = make_init_model(max_features=round(p * mx_p), max_depth=max_depth, param_file=param_file)
+        model = make_init_model(max_features=round(p * mx_p), max_depth=max_depth, max_leaves=max_leaves, param_file=param_file)
 
         start = time.time()
         F_train, estimators = make_isle_ensemble(X_train, y_train, model, eta, nu, M, seed=seed)

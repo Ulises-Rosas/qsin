@@ -157,6 +157,7 @@ def main():
     isle_args.add_argument("--nu", type=float, default=0.1, metavar="", help="Learning rate.")
     isle_args.add_argument("--M", type=int, default=500, metavar="", help="Number of trees in the ensemble.")
     isle_args.add_argument("--max_depth", type=int, default=2, metavar="", help="Maximum depth of the decision tree.")
+    isle_args.add_argument("--max_leaf_nodes", type=int, default=6, metavar="", help="Maximum number of leaf nodes in the decision tree.")
     isle_args.add_argument("--max_features", type=float, default=1/2, metavar="", help="Maximum proportion of features to use in each tree.")
     isle_args.add_argument("--param_file", type=str, default=None, metavar="", help="""JSON file with parameters for the decision tree
                            different from max_depth and mx_p. The decision trees are made using
@@ -221,8 +222,8 @@ def main():
      ) = split_data_isle(X, y,
             num_test=num_test, seed=args.seed,
             isle=args.isle, nwerror=args.nwerror, 
-            mx_p=args.max_features, max_depth=args.max_depth, param_file=args.param_file, 
-            eta=args.eta, nu=args.nu, M=args.M,
+            mx_p=args.max_features, max_depth=args.max_depth, max_leaves=args.max_leaf_nodes,
+            param_file=args.param_file, eta=args.eta, nu=args.nu, M=args.M,
             verbose=args.verbose)
 
     all_max_lams = [max_lambda(X_train, y_train, alpha=a) for a in args.alpha]
