@@ -130,6 +130,33 @@ def select_path(path, CT_spps, test_errors, n_spps = 15, factor = 1/2, inbetween
     
     return new_batches
 
+def re_center_for_isle(T_test, T_train):
+    """
+    Center data for ISLE.  When using ISLE,
+    the X matrix is a set of predictions from
+    decision trees, which are not centered. 
+    Since ISLE assumes there is an intercept term,
+    and the lasso/elnet post-processing assumes the data
+    is centered, we need to center the data.
+
+    Parameters
+    ----------
+    T_test : numpy.ndarray
+        The predictors for the test set
+    
+    T_train : numpy.ndarray
+        The predictors for the training set
+
+    Returns
+    -------
+    numpy.ndarray
+        The rescaled predictors for the test set and the training set
+    """
+
+    T_all = np.concatenate((T_train, T_test), axis=0)
+    u = np.mean(T_all, axis=0)
+
+    return T_test - u, T_train - u
 
 def main():
     parser = argparse.ArgumentParser(description="""
@@ -225,6 +252,14 @@ def main():
             mx_p=args.max_features, max_depth=args.max_depth, max_leaves=args.max_leaf_nodes,
             param_file=args.param_file, eta=args.eta, nu=args.nu, M=args.M,
             verbose=args.verbose)
+    
+    if args.isle:
+        # re-scale for ISLE. This is necessary because the ISLE
+        # assumes there is an intercept term in the model
+        if args.verbose:
+            print("Re-centering data for ISLE")
+        X_test, X_train = re_center_for_isle(X_test, X_train)
+
 
     all_max_lams = [max_lambda(X_train, y_train, alpha=a) for a in args.alpha]
     if args.verbose:
