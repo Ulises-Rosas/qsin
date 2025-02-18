@@ -302,7 +302,7 @@ def main():
                         tol=args.tol, seed = args.seed)
 
 
-    path = lasso_path(X_train, y_train, params, model, sequential_screening=False)
+    path = lasso_path(X_train, y_train, params, model)
     end_lasso = time.time() - start
 
     if args.verbose:

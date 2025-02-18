@@ -1,7 +1,10 @@
+from qsin.utils import progressbar
+
+
 import random
 import numpy as np
 
-# import matplotlib.pyplot as plt
+
 import copy
 from numba import njit
 
@@ -756,8 +759,7 @@ def k_fold_cv_random(X, y,
     return best_[0]
 
 
-def lasso_path(X_train, y_train, params, model, 
-               sequential_screening = True):
+def lasso_path(X_train, y_train, params, model, print_progress = True):
     """
     compute the lasso path based on the training set
     and  with errors based on the test set
@@ -782,17 +784,22 @@ def lasso_path(X_train, y_train, params, model,
     model.fit(X_train, y_train)
 
     path[:,0] = model.beta
+
+    if print_progress:
+        index_set = progressbar(range(1, len(lams)), "Computing lasso path: ", 40)
+        
+    else:
+        index_set = range(1, len(lams))
     
-    for i in range(1, len(lams)):
+    for i in index_set:
+    # for i in range(1, len(lams)):
 
         model.set_params(lam = lams[i],
                           warm_start = True, 
-                        #   prev_lam = lams[i-1],
                           prev_lam = None
                           )
             
-        model.fit(X_train, y_train)            
-        # errors[i] = None
+        model.fit(X_train, y_train)
         path[:,i] = model.beta
 
     return path

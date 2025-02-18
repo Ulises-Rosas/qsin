@@ -25,8 +25,7 @@ def error_fn(tmp_alpha,
                        seed = args.seed)
     
     path = lasso_path(X_train_t, y_train_t, 
-                      params, model, 
-                      sequential_screening = False)
+                      params, model, print_progress = False)
     
     tmp_errors = calculate_test_errors(args, path, params,
                                        X_test_t, y_test_t,
