@@ -5,6 +5,8 @@ from copy import deepcopy
 
 
 from qsin.sparse_solutions import split_data
+from qsin.utils import progressbar
+
 from sklearn.tree import DecisionTreeRegressor
 
 def Sm(X, y, f_m, sample_size, replace = False, seed = 12038):
@@ -34,8 +36,9 @@ def make_isle_ensemble(X_train, y_train, model, eta, nu, M, seed = 12038, verbos
     if verbose:
         print("Starting ISLE ensemble")
         print("Random sample size for trees: ", train_sample_size)
+     
+    for i in progressbar(range(M), "Computing trees: ", 40):
 
-    for i in range(M):
         model.set_params(random_state =  rs[i])
         X_sm, y_sm, f_sm = Sm(X_train, y_train, f_m, train_sample_size, replace=False)
 
