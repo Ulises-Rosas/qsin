@@ -1,9 +1,10 @@
+#!/bin/bash
 
-full_data="./test_data/full_data_net15.txt"
-# inferd_nets_loc="/Users/ulisesrosas/Desktop/qsin/test_data/n15_depth3_v0.9_n0.5"
-# inferd_nets_loc="/Users/ulisesrosas/Desktop/qsin/test_data/n15_linear"
-inferd_nets_loc="/Users/ulisesrosas/Desktop/qsin/test_data/n15_depth3_v0.9_n0.9_all"
-# inferd_nets_loc="/Users/ulisesrosas/Desktop/qsin/test_data/n15/n15_depth4_tmp"
+full_data=$1
+inferd_nets_loc=$2
+compare_nets=$3
+process_time=$4
+process_pseudo=$5
 
 
 log_file=$(ls $inferd_nets_loc/*.log)
@@ -11,25 +12,25 @@ log_file=$(ls $inferd_nets_loc/*.log)
 # get base name of $inferd_nets_loc
 inferd_nets_loc_base=$(basename $inferd_nets_loc)
 
-./test_data/analysis/compare_nets.jl $full_data\
+$compare_nets $full_data\
                   $inferd_nets_loc/*_nets.txt\
                   --outfile $inferd_nets_loc/compared_nets_$inferd_nets_loc_base.csv\
-                  --root 12 --thresh 0.1
+                  --thresh 0.0
 
-./test_data/analysis/process_time.py $log_file\
+$process_time $log_file\
                   -o $inferd_nets_loc/processed_time_$inferd_nets_loc_base.csv
 
-./test_data/analysis/process_pseudodeviances.py $inferd_nets_loc/*liks.txt\
+$process_pseudo $inferd_nets_loc/*liks.txt\
                   -o $inferd_nets_loc/processed_pseudo_$inferd_nets_loc_base.csv
 
 
 echo
 echo
 
-echo file = "'$inferd_nets_loc/compared_nets_$inferd_nets_loc_base.csv'"
-echo combs_file = "'$(ls $inferd_nets_loc/*uniq.txt)'"
-echo time_file ="'$inferd_nets_loc/processed_time_$inferd_nets_loc_base.csv'"
-echo pseudo_file ="'$inferd_nets_loc/processed_pseudo_$inferd_nets_loc_base.csv'"
+echo file = "'$( readlink -f $inferd_nets_loc/compared_nets_$inferd_nets_loc_base.csv)'"
+echo combs_file = "'$(readlink -f $(ls $inferd_nets_loc/*uniq.txt))'"
+echo time_file ="'$(readlink -f $inferd_nets_loc/processed_time_$inferd_nets_loc_base.csv)'"
+echo pseudo_file ="'$(readlink -f $inferd_nets_loc/processed_pseudo_$inferd_nets_loc_base.csv)'"
 
 echo
 echo
