@@ -1,13 +1,14 @@
 #!/usr/bin/env julia
 
 using Distributed;
-addprocs(17);
+addprocs(4);
 
 
 
 using  DelimitedFiles;
 using  Suppressor;
 using Statistics;
+@suppress @everywhere using DataFrames;
 @suppress @everywhere using PhyloNetworks;
 
 
@@ -91,12 +92,12 @@ end
     return best_dist, best_root;
 end
 
-function report_results(all_dists)
+function report_results(all_dists_mat)
 
     table = Dict();
-    for i in eachindex(all_dists)
-        row = all_dists[i][1];
-        dist = all_dists[i][3];
+    for i in eachrow(all_dists_mat)
+        row  = i[1];
+        dist = i[3];
 
         if isnan(dist)
             continue
@@ -132,12 +133,6 @@ end
         all_taxa_tmp = deepcopy(all_taxa);
         # println("all_taxa_tmp: ", all_taxa_tmp);
         tmp_dist, tmp_root = root_and_dist(all_taxa_tmp, true_net, tmp_net_file, thresh);
-        # assert(!isnan(tmp_dist),);
-
-
-        # println("tmp_dist: ", tmp_dist);
-        # println("tmp_root: ", tmp_root);
-
 
         if !isnan(tmp_dist) && tmp_dist < best_net_tmp_dist
             best_net_tmp_dist = tmp_dist;
@@ -184,19 +179,20 @@ function main(true_nets_file, thresh, net_files, outfile)
 
     true_nets = readInputTrees(true_nets_file);
     all_taxa = [i.name for i in true_nets[1].leaf];
-    
-    all_dists = [];
-    all_dists = @distributed (push!) for tmp_net_file in net_files
+
+    all_dists = @distributed (vcat) for tmp_net_file in net_files
         true_nets_tmp = deepcopy(true_nets);
         all_taxa_tmp = deepcopy(all_taxa);
-        evaluate_true_net(true_nets_tmp, all_taxa_tmp, tmp_net_file, thresh);
+        tmp = evaluate_true_net(true_nets_tmp, all_taxa_tmp, tmp_net_file, thresh);
+
+        DataFrame(reshape(tmp, 1, :), :auto);
     end
 
+    println("\n");
+    arr = Matrix(all_dists);
+    report_results(arr);
+    writedlm(outfile, arr, ',');
 
-    # println(all_dists);
-    println("");
-    report_results(all_dists);
-    writedlm(outfile, all_dists, ',');
 end
 
 
@@ -264,7 +260,6 @@ function help_func()
     exit(0);    
 end
 
-# --root root: int; root for all nets. (default: $root)
 
 if length(ARGS) < 2
     help_func();
@@ -284,10 +279,7 @@ for i in eachindex(ARGS)
         push!(nets, ARGS[i]);
 
     else
-        global toa = true
-
-        # if ARGS[i] == "--root"
-        #     global root =  ARGS[i+1];
+        global toa = true;
 
         if ARGS[i] == "--thresh"
             global thresh =  parse(Float64, ARGS[i+1]);
@@ -309,7 +301,6 @@ end
 println("main_net: ", main_net);
 println("nets : ", nets);
 println("outfile: ", outfile);
-# println("root: ", root);
 println("thresh: ", thresh);
 
 
