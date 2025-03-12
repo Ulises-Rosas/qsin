@@ -153,10 +153,9 @@ def re_center_for_isle(T_test, T_train):
         The rescaled predictors for the test set and the training set
     """
 
-    T_all = np.concatenate((T_train, T_test), axis=0)
-    u = np.mean(T_all, axis=0)
-
-    return T_test - u, T_train - u
+    u = np.mean(T_train, axis=0)
+    sd = np.std(T_train, axis=0)    
+    return (T_test - u)/sd, (T_train - u)/sd
 
 def main():
     parser = argparse.ArgumentParser(description="""
@@ -236,8 +235,8 @@ def main():
     X, y = data[:, :-1], data[:, -1]
     n,p = X.shape
 
-    X = _scaler(X, X, sted = True)
-    y = _scaler(y, y, sted = False if args.nstdy else True)
+    # X = _scaler(X, X, sted = True)
+    # y = _scaler(y, y, sted = False if args.nstdy else True)
 
     num_test = int(n*args.p_test)
 
@@ -257,7 +256,7 @@ def main():
         # re-scale for ISLE. This is necessary because the ISLE
         # assumes there is an intercept term in the model
         if args.verbose:
-            print("Re-centering data for ISLE")
+            print("Re-standarize data for ISLE")
         X_test, X_train = re_center_for_isle(X_test, X_train)
 
 
