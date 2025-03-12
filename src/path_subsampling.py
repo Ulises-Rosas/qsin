@@ -235,8 +235,6 @@ def main():
     X, y = data[:, :-1], data[:, -1]
     n,p = X.shape
 
-    # X = _scaler(X, X, sted = True)
-    # y = _scaler(y, y, sted = False if args.nstdy else True)
 
     num_test = int(n*args.p_test)
 
@@ -250,7 +248,7 @@ def main():
             isle=args.isle, nwerror=args.nwerror, 
             mx_p=args.max_features, max_depth=args.max_depth, max_leaves=args.max_leaf_nodes,
             param_file=args.param_file, eta=args.eta, nu=args.nu, M=args.M,
-            verbose=args.verbose)
+            verbose=args.verbose, nstdy = args.nstdy)
     
     if args.isle:
         # re-scale for ISLE. This is necessary because the ISLE

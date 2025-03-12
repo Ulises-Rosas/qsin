@@ -83,7 +83,7 @@ def split_data_isle(X, y, num_test, seed,
                     isle=True, nwerror=False, 
                     mx_p=1/2, max_depth=5, param_file=None, max_leaves=6,
                     eta=0.5, nu=0.1, M=100,
-                    verbose=True):
+                    verbose=True, nstdy = False):
     
     """
     Split data into training and testing sets, and apply ISLE if needed.
@@ -118,6 +118,8 @@ def split_data_isle(X, y, num_test, seed,
         Number of trees in the ensemble.
     verbose : bool
         Whether to print progress.
+    nstdy : bool
+        Whether to standardize the target vector.
 
     Returns
     -------
@@ -136,6 +138,20 @@ def split_data_isle(X, y, num_test, seed,
         X_test, y_test = None, None
     else:
         X_train, X_test, y_train, y_test = split_data(X, y, num_test=num_test, seed=seed)
+
+    x_u = np.mean(X_train, axis = 0)
+    x_sd = np.std(X_train, axis = 0)
+
+    y_u = np.mean(y_train)
+    y_sd = np.std(y_train)
+
+    X_train = (X_train - x_u) / x_sd
+    y_train = (y_train - y_u) / y_sd if nstdy else y_train - y_u
+
+    if X_test is not None:
+        X_test = (X_test - x_u) / x_sd
+        y_test = (y_test - y_u) / y_sd if nstdy else y_test - y_u
+
 
     if isle:
         n, p = X_train.shape
