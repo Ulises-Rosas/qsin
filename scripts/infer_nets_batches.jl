@@ -163,7 +163,7 @@ function main(startfile, buckyCFfile, batches,
     
     
     netstart    = readTopology(startfile);
-    all_buckyCF = readTableCF(buckyCFfile);
+    # all_buckyCF = readTableCF(buckyCFfile);
     # h_max = hmax;
     
     # read csv file buckyCFfile
@@ -216,7 +216,8 @@ function main(startfile, buckyCFfile, batches,
             end
             
             if i == 1 && epoch == 1
-                l_k = topologyQPseudolik!(net_k, all_buckyCF);
+                # l_k = topologyQPseudolik!(net_k, all_buckyCF);
+                l_k = net_k.loglik;
 
                 push!(all_liks, l_k);
                 push!(all_nets, net_k);
@@ -224,7 +225,8 @@ function main(startfile, buckyCFfile, batches,
                 continue;
             end
     
-            l_k = topologyQPseudolik!(net_k, all_buckyCF);
+            # l_k = topologyQPseudolik!(net_k, all_buckyCF);
+            l_k = net_k.loglik;
             l_best = minimum(all_liks);
 
             dE = l_k - l_best;
