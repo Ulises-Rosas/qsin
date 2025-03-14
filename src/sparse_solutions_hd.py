@@ -1,3 +1,5 @@
+# high-dimensional sparse solutions
+
 import random
 from collections import deque
 
@@ -5,138 +7,12 @@ from collections import deque
 import numpy as np
 from numba import njit
 from qsin.utils import progressbar
-from qsin.CD_dual_gap import (msoft_threshold, epoch_lasso_v2, update_beta_lasso_v2, dualpa)
+from qsin.CD_dual_gap import (epoch_lasso_v2, update_beta_lasso_v2, dualpa,
+                              epoch_enet_v2 , update_enet_v2, dualpa_elnet)
 
-# @njit
-def sparse_XB(X, B):
-    # return sparse.csr_matrix(X).multiply(sparse.csr_matrix(B))
-    return np.matmul(X, B)
 
 def mse(y, X, B):
     return np.mean( ( y - X.dot(B) )**2 ) 
-
-
-@njit
-def epoch_enet(X, beta, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps, lam_1_alpha, lam_alpha, s_new, diff):
-
-    for j in chosen_ps:
-
-        b_old = beta[j]
-        
-        A2 = np.where(beta != 0)[0]
-        # take out j from the array A2
-        A2 = A2[A2 != j]
-        tmp_X_T_X = X_T_X[j,:]
-
-        delta = c1 * ( Xj_T_y[j] - np.dot(tmp_X_T_X[A2], beta[A2]) )
-        denom = (c1 * Xj_T_Xj[j]) + lam_1_alpha
-
-        beta[j] = msoft_threshold(delta, lam_alpha, denom)
-
-        # beautiful rank 1 sums 
-        if beta[j] != 0.0:
-            s_new += X[:,j] * beta[j]
-
-        diff_j = b_old - beta[j]
-        if diff_j != 0.0:    
-            diff += X[:,j] * diff_j
-
-@njit
-def epoch_enet_v2(X, beta, lam_1_alpha, lam_alpha, r, c1, n, chosen_ps, s_new, s_diff):
-
-    for j in chosen_ps:
-        b_old = beta[j]
-        
-        delta = c1 * ( np.dot(X[:,j], r) + n*b_old )
-        denom = (c1 * n) + lam_1_alpha
-        beta[j] = msoft_threshold(delta, lam_alpha, denom)
-
-        diff_bj = b_old - beta[j]
-        if diff_bj != 0.0:    
-            Xj_diff_bj = X[:,j] * diff_bj # O(2n)
-
-            r      += Xj_diff_bj # O(2n)
-            s_diff += Xj_diff_bj # O(2n)
-
-        # rank 1 sums 
-        if beta[j] != 0.0:
-            s_new += X[:,j] * beta[j] # O(2n)
-
-
-@njit
-def update_beta_enet(beta, c1, Xj_T_y, Xj_T_Xj, X_T_X, 
-                     chosen_ps, lam_1_alpha, lam_alpha):
-    for j in chosen_ps:
-        # j = 1
-        A2 = np.where(beta != 0)[0]
-        # take out j from the array A2
-        A2 = A2[A2 != j]
-
-        tmp_X_T_X = X_T_X[j,:]
-
-        delta = c1 * ( Xj_T_y[j] - np.dot(tmp_X_T_X[A2], beta[A2]) )
-        denom = (c1 * Xj_T_Xj[j]) + lam_1_alpha
-
-        beta[j] = msoft_threshold(delta, lam_alpha, denom)
-
-@njit
-def update_enet_v2(X, beta, lam_1_alpha, lam_alpha, r, c1, n, chosen_ps):
-
-    for j in chosen_ps:
-        b_old = beta[j]
-        
-        delta = c1 * ( np.dot(X[:,j], r) + n*b_old )
-        denom = (c1 * n) + lam_1_alpha
-        beta[j] = msoft_threshold(delta, lam_alpha, denom)
-
-        diff_bj = b_old - beta[j]
-        if diff_bj != 0.0:
-            r  += X[:,j] * diff_bj # O(3n)
-
-# @jit
-def duality_gap_elnet(R, X, y, beta, lam_1_alpha, lam_alpha, ny2):
-
-    n = len(y)
-
-    R_norm_sq = np.linalg.norm(R)**2 # O(n)
-    b_norm_sq = np.linalg.norm(beta)**2 # O(p)
-
-    c1 = 1/n
-    # O(p)
-    p_obj = c1 * R_norm_sq  + lam_alpha * np.linalg.norm(beta, ord=1) + (lam_1_alpha/2)*b_norm_sq 
-    rt = (2/n) * R
-
-    # O(np)
-    norm_inf = np.linalg.norm(X.T @ rt  - lam_1_alpha*beta, ord=np.inf)
-
-    c2 = lam_alpha/max(norm_inf, lam_alpha)
-
-    # O(n)
-    d_obj   = (2/n) * c2 * np.dot(R, y) - (c2**2) * (c1 * R_norm_sq + (lam_1_alpha/2)*b_norm_sq)
-    w_d_gap = (p_obj - d_obj)*n/ny2
-
-    return w_d_gap
-
-# @njit
-def dualpa_elnet(R, X, y, beta, lam_1_alpha, lam_alpha, ny2):
-    
-    if lam_1_alpha == 0:
-        return dualpa(X, y, lam_alpha, beta, ny2)
-
-    n = len(y)
-    b_norm_sq = (beta**2).sum()
-
-    rt = (2/n) * R
-    norm_inf = np.linalg.norm(X.T @ rt  - lam_1_alpha*beta, ord=np.inf)
-
-    c2 = lam_alpha/max(norm_inf, lam_alpha)
-    c3 = 1 + c2**2
-
-    d_gap = (1/n)*np.dot(R, c3*R - 2*c2*y) +\
-            lam_alpha*np.linalg.norm(beta, ord=1) +\
-            c3*(lam_1_alpha/2)*b_norm_sq
-
-    return d_gap*n/ny2
 
 
 class Lasso:
@@ -270,7 +146,7 @@ class Lasso:
             if j not in A:
                 Ac_q.append(j)
 
-        return np.array(Ac_q, dtype=np.int64) # O(p)
+        return np.array(Ac_q) # O(p)
     
     def update_sorted_active_set(self, A, Ac_f, all_p):
         """
@@ -299,13 +175,16 @@ class Lasso:
             # He-styled 
             # initialization 
             # of the coefficients
-            np.random.seed(self.seed)
-            self.beta = np.random.normal(0, np.sqrt(2/p), size=p)
+            # np.random.seed(self.seed)
+            # self.beta = np.random.normal(0, np.sqrt(2/p), size=p)
+            
+            # zero initialization
+            self.beta = np.zeros(p)
 
         self.set_Xy(X, y)
 
         # few iterations of coordinate descent
-        all_p = np.array(range(p), dtype=np.int64)
+        all_p = np.array(range(p))
 
         # O(2p + np*T_init) = O(np)
         Aq, A = self.initial_active_set(c1, all_p)
@@ -337,6 +216,13 @@ class Lasso:
             self.cd_epoch(c1, n, A_rr, xb_new, xb_diff)
 
             # O(n)
+            # checking convergence on the beta values only
+            # might be not correct as in high dimensions (p > n) there 
+            # does not exist a unique solution (i.e., X'X is singular). 
+            # However, there is a unique solution for XB. so, we can check
+            # the convergence on the XB values
+            # ref: Sparsity, the Lasso, and Friends 
+            # (section 3.2), Ryan Tibshirani, 2017.
             max_updt = np.max(np.abs(xb_diff))
             w_max = np.max(np.abs(xb_new))
 
@@ -678,7 +564,6 @@ def lasso_path(X_train, y_train, params, model, print_progress = True):
     #     X_test = X_train
     #     y_test = y_train
 
-
     _,p = X_train.shape
     lams = params['lam']
 
@@ -752,28 +637,3 @@ def get_non_zero_coeffs(path, ZO, thresh = 0.5):
     return non_zero_coeffs
 # endregion
 
-
-# import numpy as np
-# import time
-# seed = 12037
-# np.random.seed(seed)
-# n = 500
-# p = 6000
-# X = np.random.randn(n, p)
-# y = np.random.randn(n) + 2
-# n = len(y)
-
-# X_train, X_test, y_train, y_test = split_data(X, y, 100)
-# X_train = (X_train - np.mean(X_train, axis=0)) / np.std(X_train, axis=0)
-# X_test = (X_test - np.mean(X_test, axis=0)) / np.std(X_test, axis=0)
-
-
-# # self = Lasso(max_iter=1000, lam=.1, seed=seed, tol=1e-4)
-# self = ElasticNet(max_iter=1000, lam=.001, seed=seed, tol=1e-4, alpha=0.9, fit_intercept=True)
-# self._verbose = False
-# start = time.time()
-# self.fit(X_train, y_train)
-# print("Time: ", time.time() - start)
-# print(np.sum(self.beta != 0))
-# test_error = self.score(X_test, y_test)
-# print("Test error: ", test_error)
