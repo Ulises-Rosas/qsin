@@ -1,24 +1,16 @@
-from qsin.utils import progressbar
-
-
-import random
-import numpy as np
-
 
 import copy
-from numba import njit
+import random
 
+import numpy as np
+from numba import njit
+from qsin.utils import progressbar
+from qsin.CD_dual_gap import (epoch_lasso, update_beta_lasso, dualpa, 
+                              epoch_enet,  update_beta_enet, dualpa_elnet,)
 
 # @njit
 def sparse_XB(X, B):
-    # return sparse.csr_matrix(X).multiply(sparse.csr_matrix(B))
     return np.matmul(X, B)
-
-# sparse_XB = lambda X, B: np.matmul(X, B)
-
-
-# np.random.seed(123)
-# random.seed(123)
 
 # standarize data
 def std_data(X):
@@ -26,196 +18,6 @@ def std_data(X):
 
 def mse(y, X, B):
     return np.mean( ( y - X.dot(B) )**2 ) 
-
-
-@njit
-def msoft_threshold( delta, lam, denom):
-    if delta > lam:
-        return (delta - lam) / denom
-    elif delta < -lam:
-        return (delta + lam) / denom
-    else:
-        return 0
-
-@njit
-def update_beta_lasso(beta, lam, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps):
-
-    for j in chosen_ps:
-        # j = 1
-        # A2 = np.where(beta !=  0)[0]
-        # # take out j from the array A2
-        # A2 = A2[A2 != j]
-
-        A2 = np.where(beta !=  beta[j])[0]
-
-        tmp_X_T_X = X_T_X[j,:]
-
-        delta = c1 * ( Xj_T_y[j] - np.dot(tmp_X_T_X[A2], beta[A2]) )
-        denom = c1 * Xj_T_Xj[j]
-        beta[j] = msoft_threshold(delta, lam, denom)
-
-
-@njit
-def epoch_lasso(X, beta, lam, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps, s_new, diff):
-
-    for j in chosen_ps:
-        # j = 1
-        b_old = beta[j]
-        
-        A2 = np.where(beta != 0)[0]
-        # take out j from the array A2
-        A2 = A2[A2 != j]
-        tmp_X_T_X = X_T_X[j,:]
-
-        delta = c1 * ( Xj_T_y[j] - np.dot(tmp_X_T_X[A2], beta[A2]) )
-        denom = c1 * Xj_T_Xj[j]
-        beta[j] = msoft_threshold(delta, lam, denom)
-
-
-        # beautiful rank 1 sums 
-        if beta[j] != 0.0:
-            s_new += X[:,j] * beta[j]
-
-        diff_j = b_old - beta[j]
-        if diff_j != 0.0:    
-            diff += X[:,j] * diff_j
-
-
-@njit
-def epoch_enet(X, beta, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps, lam_1_alpha, lam_alpha, s_new, diff):
-
-    for j in chosen_ps:
-        # j = 1
-        b_old = beta[j]
-        
-        A2 = np.where(beta != 0)[0]
-        # take out j from the array A2
-        A2 = A2[A2 != j]
-        tmp_X_T_X = X_T_X[j,:]
-
-        delta = c1 * ( Xj_T_y[j] - np.dot(tmp_X_T_X[A2], beta[A2]) )
-        denom = (c1 * Xj_T_Xj[j]) + lam_1_alpha
-
-        beta[j] = msoft_threshold(delta, lam_alpha, denom)
-
-
-        # beautiful rank 1 sums 
-        if beta[j] != 0.0:
-            s_new += X[:,j] * beta[j]
-
-        diff_j = b_old - beta[j]
-        if diff_j != 0.0:    
-            diff += X[:,j] * diff_j
-
-
-@njit
-def update_beta_enet(beta, c1, Xj_T_y, Xj_T_Xj, X_T_X, 
-                     chosen_ps, lam_1_alpha, lam_alpha):
-    for j in chosen_ps:
-        # j = 1
-        A2 = np.where(beta != 0)[0]
-        # take out j from the array A2
-        A2 = A2[A2 != j]
-
-        tmp_X_T_X = X_T_X[j,:]
-
-        delta = c1 * ( Xj_T_y[j] - np.dot(tmp_X_T_X[A2], beta[A2]) )
-        denom = (c1 * Xj_T_Xj[j]) + lam_1_alpha
-
-        beta[j] = msoft_threshold(delta, lam_alpha, denom)
-
-    # return beta
-
-
-# @jit
-def calculate_dual_gap(R, X, y, lam, beta):
-    n = len(y)
-
-    p_obj = (1/n) * np.linalg.norm(R)**2  + lam * np.linalg.norm(beta, ord=1)
-
-    theta = (2/n) * R
-    norm_inf = np.linalg.norm(X.T @ theta, ord=np.inf)
-    # max([1,2])
-    # deno = norm_inf if norm_inf > lam else lam
-    theta_ = theta/np.max([lam, norm_inf])
-
-    d_obj = (1/n)*( np.linalg.norm(y)**2 - np.linalg.norm(y - (lam*n/2)*theta_)**2 )
-
-    w_d_gap = (p_obj - d_obj)*n/np.linalg.norm(y)**2
-
-    return w_d_gap
-
-
-def dualpa_max(norm_inf, lam):
-    return lam if norm_inf < lam else norm_inf
-
-def dualpa(X, y, lam, beta, ny2):
-    R = y - X @ beta
-    
-
-    n= len(y)
-    c1 = 1/n
-
-    rt = 2*c1*R
-    norm_inf = np.linalg.norm(X.T @ rt, ord=np.inf)
-    f = dualpa_max(norm_inf, lam)
-
-    c2 = lam/f
-    
-    d_gap = (1/n)*np.dot(R, (1 + c2**2)*R - 2*c2*y) + lam*np.linalg.norm(beta, ord=1)
-    # d_gap = dualpa_gap(R, y, lam, beta, c2, n)
-
-    return d_gap*n/ny2
-
-# @jit
-def duality_gap_elnet(R, X, y, beta, lam_1_alpha, lam_alpha):
-
-    n = len(y)
-
-    R_norm_sq = np.linalg.norm(R)**2
-    b_norm_sq = np.linalg.norm(beta)**2
-
-    c1 = 1/n
-    p_obj = c1 * R_norm_sq  + lam_alpha * np.linalg.norm(beta, ord=1) + (lam_1_alpha/2)*b_norm_sq
-    rt = (2/n) * R
-
-    norm_inf = np.linalg.norm(X.T @ rt  - lam_1_alpha*beta, ord=np.inf)
-
-    # f = dualpa_max(norm_inf, lam_alpha)
-    f = norm_inf if norm_inf > lam_alpha else lam_alpha
-    c2 = lam_alpha/f
-
-    d_obj   = (2/n) * c2 * np.dot(R, y) - (c2**2) * (c1 * R_norm_sq + (lam_1_alpha/2)*b_norm_sq)
-    w_d_gap = (p_obj - d_obj)*n/np.linalg.norm(y)**2
-
-    return w_d_gap
-
-# @njit
-def dualpa_elnet(R, X, y, beta, lam_1_alpha, lam_alpha, ny2):
-    
-    # R_norm_sq = np.linalg.norm(R)**2
-    if lam_1_alpha == 0:
-        return dualpa(X, y, lam_alpha, beta, ny2)
-    
-    # R = y - X @ beta
-
-    n = len(y)
-    # b_norm_sq = np.linalg.norm(beta)**2
-    b_norm_sq = (beta**2).sum()
-
-    rt = (2/n) * R
-    norm_inf = np.linalg.norm(X.T @ rt  - lam_1_alpha*beta, ord=np.inf)
-
-    # f = dualpa_max(norm_inf, lam_alpha)
-    f = norm_inf if norm_inf > lam_alpha else lam_alpha
-    c2 = lam_alpha/f
-    c3 = 1 + c2**2
-
-    d_gap = (1/n)*np.dot(R, c3*R - 2*c2*y) +\
-            lam_alpha*np.linalg.norm(beta, ord=1) +\
-            c3*(lam_1_alpha/2)*b_norm_sq
-
-    return d_gap*n/ny2
 
 
 class Lasso:
@@ -244,12 +46,6 @@ class Lasso:
         self.seed = seed
 
         self.fit_intercept = fit_intercept
-        
-
-
-        # if self.warm_start:
-        #     self.beta = beta
-        # else:
         self.beta = np.array([])
 
 
@@ -263,10 +59,6 @@ class Lasso:
         self.Xj_T_Xj = np.array([])
         self.Xj_T_y = np.array([])
         self.ny2 = np.array([])
-
-    # @njit
-    def soft_threshold(self, delta, lam, denom):
-        return msoft_threshold(delta, lam, denom)
         
     def initial_iterations(self, c1, Xj_T_y, Xj_T_Xj, X_T_X, all_p):
 
@@ -315,34 +107,19 @@ class Lasso:
             set_X (overwrite)
         """
 
-        if self.copyX and len(self.X) == 0:
-            self.X = copy.deepcopy(X)
-            self.X_T_X = np.matmul(X.T, X)
-            self.Xj_T_Xj = np.diag(self.X_T_X)
-            self.Xj_T_y = np.matmul(X.T, y)
-            self.ny2 = np.linalg.norm(y)**2
-
-        elif not self.copyX and len(self.X) == 0:
-            self.X = X
-            self.X_T_X = np.matmul(X.T, X)
-            self.Xj_T_Xj = np.diag(self.X_T_X)
-            self.Xj_T_y = np.matmul(X.T, y)
-            self.ny2 = np.linalg.norm(y)**2
-
-        elif self.copyX and len(self.X) != 0:
+        if self.copyX and len(self.X) != 0:
             pass
 
-        elif not self.copyX and len(self.X) != 0:
+        else:
             self.X = X
-            self.X_T_X = np.matmul(X.T, X)
+            # optimal for dot products in CD
+            self.X_T_X = np.asfortranarray(np.matmul(X.T, X))
             self.Xj_T_Xj = np.diag(self.X_T_X)
             self.Xj_T_y = np.matmul(X.T, y)
             self.ny2 = np.linalg.norm(y)**2
 
     def dual_gap(self, y):
         return dualpa(self.X, y, self.lam, self.beta, self.ny2)
-        # R = y - self.sparse_XB(self.X)
-        # return dualpa(R, self.X, y, self.lam, self.beta)
     
     def fit(self, X, y):
         # X = X_train
@@ -356,18 +133,15 @@ class Lasso:
 
         self.set_Xy(X,y)
 
-        # X_T_X = self.X_T_X
-        # # precompute Xj^T * Xj
-        # Xj_T_Xj = self.Xj_T_Xj
-        # # precompute Xj^T * y
-        # Xj_T_y = np.matmul(self.X.T, y)
         
         if not self.warm_start:
             # He-styled 
             # initialization 
             # of the coefficients
-            np.random.seed(self.seed)
-            self.beta = np.random.normal(0, np.sqrt(2/p), size=p) 
+            # np.random.seed(self.seed)
+            # self.beta = np.random.normal(0, np.sqrt(2/p), size=p) 
+
+            self.beta = np.zeros(p)  
          
         # few iterations of coordinate descent
         all_p = np.array(range(p))
@@ -804,63 +578,6 @@ def lasso_path(X_train, y_train, params, model, print_progress = True):
 
     return path
 
-# def myenet_path(X_train, y_train, X_test, y_test, params, model, 
-#                sequential_screening = True,
-#                alpha = 0.5):
-#     """
-#     compute the lasso path based on the training set
-#     and  with errors based on the test set
-#     """
-#     # model = Lasso()
-#     # X = X_train
-#     # y = y_train
-#     # params = {'lam': np.logspace(-2, max_lambda(X,y), 3)}
-
-#     if X_test is None and y_test is None:
-#         X_test = X_train
-#         y_test = y_train
-
-
-#     _,p = X_train.shape
-#     lams = params['lam']
-
-#     errors = np.zeros(len(lams))
-#     path = np.ones((p, len(params['lam'])))
-#     y_train_enet = np.concatenate((y_train, np.zeros(p)))
-
-#     all_gammas = np.zeros(len(lams))
-#     for i,lam in enumerate(lams):
-#         # i = 0
-#         # lam = lams[i]
-#         alfa = lam * alpha
-#         beta = lam * (1 - alpha)
-#         sf = (1 + beta) ** (-1/2)
-#         gamma = alfa * sf
-#         all_gammas[i] = gamma
-
-#         if i > 1:
-#             if sequential_screening:
-#                 prev_lam = all_gammas[i-1]
-
-#             else:
-#                 prev_lam = None
-
-#             model.set_params(lam = gamma,
-#                              warm_start = True, 
-#                              beta = model.beta,
-#                              prev_lam = prev_lam)
-            
-#         else:
-
-#             model.set_params(lam=gamma)
-#             # model.warm_start
-
-#         X_train_enet =  np.vstack([X_train, np.sqrt(beta) * np.eye(p)])
-#         model.fit(X_train_enet, y_train_enet)
-#         errors[i] = None
-#         path[:,i] = model.beta*sf
-
-#     return path, all_gammas
 
 def theta(path_i):
 
@@ -926,29 +643,3 @@ def get_non_zero_coeffs(path, ZO, thresh = 0.5):
                 non_zero_coeffs.append(non_zero_idx)
 
     return non_zero_coeffs
-
-
-# import numpy as np
-# import time
-# seed = 12037
-# np.random.seed(seed)
-# n = 500
-# p = 6000
-# X = np.random.randn(n, p)
-# y = np.random.randn(n) + 2
-# n = len(y)
-
-# X_train, X_test, y_train, y_test = split_data(X, y, 100)
-# X_train = (X_train - np.mean(X_train, axis=0)) / np.std(X_train, axis=0)
-# X_test = (X_test - np.mean(X_test, axis=0)) / np.std(X_test, axis=0)
-
-
-# # self = Lasso(max_iter=1000, lam=.1, seed=seed, tol=1e-4)
-# self = ElasticNet(max_iter=1000, lam=.001, seed=seed, tol=1e-4, alpha=0.9, fit_intercept=True)
-# self._verbose = False
-# start = time.time()
-# self.fit(X_train, y_train)
-# print("Time: ", time.time() - start)
-# print(np.sum(self.beta != 0))
-# test_error = self.score(X_test, y_test)
-# print("Test error: ", test_error)
