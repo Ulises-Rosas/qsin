@@ -1,6 +1,6 @@
-import copy
 import random
 from collections import deque
+
 
 import numpy as np
 from numba import njit
@@ -29,52 +29,51 @@ def msoft_threshold( delta, lam, denom):
         return 0
 
 @njit
-def update_beta_lasso(beta, lam, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps):
-    # O(p^2)
+def epoch_lasso_v2(X, beta, lam, r, c1, n, chosen_ps, s_new, s_diff):
+    
+    # O(9*np) = O(np)
     for j in chosen_ps:
-        
-        # O(p)
-        A2 = np.where(beta !=  beta[j])[0]
-        # O(1)
-        tmp_X_T_X = X_T_X[j,:]
-        
-        # O(p)
-        delta = c1 * ( Xj_T_y[j] - np.dot(tmp_X_T_X[A2], beta[A2]) )
-        denom = c1 * Xj_T_Xj[j]
+    
+        b_old = beta[j]
+
+        delta = c1 * ( np.dot(X[:,j], r) + n*b_old) # O(n)
+        denom = c1 * n
         beta[j] = msoft_threshold(delta, lam, denom)
 
+
+        diff_bj = b_old - beta[j]
+        if diff_bj != 0.0:    
+            Xj_diff_bj = X[:,j] * diff_bj # O(2n)
+
+            r      += Xj_diff_bj # O(2n)
+            s_diff += Xj_diff_bj # O(2n)
+
+        # rank 1 sums 
+        if beta[j] != 0.0:
+            s_new += X[:,j] * beta[j] # O(2n)
 
 @njit
-def epoch_lasso(X, beta, lam, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps, s_new, diff):
-
+def update_beta_lasso_v2(X, beta, lam, r, c1, n, chosen_ps):
+    
+    # O(3*np) = O(np)
     for j in chosen_ps:
-        # j = 1
         b_old = beta[j]
-        
-        A2 = np.where(beta != 0)[0]
-        # take out j from the array A2
-        A2 = A2[A2 != j]
-        tmp_X_T_X = X_T_X[j,:]
 
-        delta = c1 * ( Xj_T_y[j] - np.dot(tmp_X_T_X[A2], beta[A2]) )
-        denom = c1 * Xj_T_Xj[j]
+        delta = c1 * ( np.dot(X[:,j], r) + n*b_old ) # O(n)
+        denom = c1 * n
         beta[j] = msoft_threshold(delta, lam, denom)
 
+        diff_bj = b_old - beta[j]
+        if diff_bj != 0.0:
+            r  += X[:,j] * diff_bj # O(3n)
 
-        # beautiful rank 1 sums 
-        if beta[j] != 0.0:
-            s_new += X[:,j] * beta[j]
-
-        diff_j = b_old - beta[j]
-        if diff_j != 0.0:    
-            diff += X[:,j] * diff_j
 
 
 @njit
 def epoch_enet(X, beta, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps, lam_1_alpha, lam_alpha, s_new, diff):
 
     for j in chosen_ps:
-        # j = 1
+
         b_old = beta[j]
         
         A2 = np.where(beta != 0)[0]
@@ -138,21 +137,21 @@ def calculate_dual_gap(R, X, y, lam, beta):
 def dualpa_max(norm_inf, lam):
     return lam if norm_inf < lam else norm_inf
 
-def dualpa(X, y, lam, beta, ny2):
-    R = y - X @ beta
-    
+def dualpa(X, y, R, lam, beta, ny2):
 
-    n= len(y)
+    n = len(y)
     c1 = 1/n
 
     rt = 2*c1*R
+    
+    # O(np)
     norm_inf = np.linalg.norm(X.T @ rt, ord=np.inf)
     f = dualpa_max(norm_inf, lam)
 
     c2 = lam/f
     
+    # O(n + p)
     d_gap = (1/n)*np.dot(R, (1 + c2**2)*R - 2*c2*y) + lam*np.linalg.norm(beta, ord=1)
-    # d_gap = dualpa_gap(R, y, lam, beta, c2, n)
 
     return d_gap*n/ny2
 
@@ -242,28 +241,38 @@ class Lasso:
         self.copyX = copyX
 
         self.X = np.array([])
-        self.X_T_X = np.array([])
-        self.Xj_T_Xj = np.array([])
-        self.Xj_T_y = np.array([])
         self.ny2 = np.array([])
+        self.r = np.array([])
 
         self._verbose = True
 
     # @njit
     def soft_threshold(self, delta, lam, denom):
         return msoft_threshold(delta, lam, denom)
-        
-    def initial_iterations(self, c1, Xj_T_y, Xj_T_Xj, X_T_X, all_p):
+    
+    def update_beta(self, c1, n, all_p):
+        update_beta_lasso_v2(
+            self.X, self.beta, self.lam, self.r,
+            c1, n, all_p
+        )
 
+    def initial_iterations(self, c1, all_p):
+
+        n,_ = self.X.shape
         for _ in range(self.init_iter):
-            self.update_beta(c1, Xj_T_y, Xj_T_Xj, X_T_X, all_p)
+            # O(np)
+            self.update_beta(c1, n, all_p)
 
-    def initial_active_set(self, X, y, c1, Xj_T_y, Xj_T_Xj, X_T_X, all_p):
+    def sorted_init_active_set(self):
+        """
+        return the active set A as a deque
+        and a set A of the indices
+        Aq is the active set as a deque and it is sorted
+        with respect to the indices
 
-        # few iterations of coordinate descent
-        self.initial_iterations(c1, Xj_T_y, Xj_T_Xj, X_T_X, all_p)
-        # we define an active set A as the set of indices
-        
+        A is the active set as a set
+        """
+
         Aq = deque()
         A = set()
         # O(2p)
@@ -275,18 +284,15 @@ class Lasso:
 
         return Aq, A
 
-    
-    def sparse_XB(self, X):
-        """
-        This function returns the sparse matrix
-        X[:, A] * B[A], where A is the index set of
-        non-zero coefficients
-        """
-        # A = np.where(self.beta != 0)[0]
-        # return np.matmul(X[:, A], self.beta[A])
+    def initial_active_set(self, c1, all_p):
 
-        return np.matmul(X, self.beta)
-        # return sparse_XB(X, self.beta)
+        # few iterations of coordinate descent
+        # O(np*T), where T is the number of initial iterations
+        self.initial_iterations(c1, all_p)
+
+        # we define an active set A as the set of indices
+        # O(2p)
+        return self.sorted_init_active_set()
     
     def set_Xy(self, X,y):
         """
@@ -305,34 +311,22 @@ class Lasso:
             set_X (overwrite)
         """
 
-        if self.copyX and len(self.X) == 0:
-            self.X = copy.deepcopy(X)
-            self.X_T_X = np.matmul(X.T, X)
-            self.Xj_T_Xj = np.diag(self.X_T_X)
-            self.Xj_T_y = np.matmul(X.T, y)
-            self.ny2 = np.linalg.norm(y)**2
-
-        elif not self.copyX and len(self.X) == 0:
-            self.X = X
-            self.X_T_X = np.matmul(X.T, X)
-            self.Xj_T_Xj = np.diag(self.X_T_X)
-            self.Xj_T_y = np.matmul(X.T, y)
-            self.ny2 = np.linalg.norm(y)**2
-
-        elif self.copyX and len(self.X) != 0:
+        if self.copyX and len(self.X) != 0:
             pass
 
-        elif not self.copyX and len(self.X) != 0:
-            self.X = X
-            self.X_T_X = np.matmul(X.T, X)
-            self.Xj_T_Xj = np.diag(self.X_T_X)
-            self.Xj_T_y = np.matmul(X.T, y)
-            self.ny2 = np.linalg.norm(y)**2
+        else:
+            # as contiguous array
+            # makes the accessing of columns
+            # faster. The same for residuals.
+            # this fast block access is important
+            # for multiple dot products in the
+            # coordinate descent
+            self.X = np.asfortranarray(X)
+            self.ny2 = np.linalg.norm(y)**2 # O(n)
+            self.r = np.ascontiguousarray(y - self.X @ self.beta) # O(np)
 
     def dual_gap(self, y):
-        return dualpa(self.X, y, self.lam, self.beta, self.ny2)
-        # R = y - self.sparse_XB(self.X)
-        # return dualpa(R, self.X, y, self.lam, self.beta)
+        return dualpa(self.X, y, self.r, self.lam, self.beta, self.ny2)
 
     def get_sorted_complement(self, A, all_p):
         """
@@ -363,36 +357,30 @@ class Lasso:
 
         return Anew
         
-    
     def fit(self, X, y):
         # X = X_train
         # y = y_train
         # self.max_iter = 10000
-        # self.lam = 10
         # self.set_params(max_iter = 100, lam = 0.1)
         
         n, p = X.shape
         c1 = 2 / n
-
-        self.set_Xy(X,y)
         
         if not self.warm_start:
             # He-styled 
             # initialization 
             # of the coefficients
             np.random.seed(self.seed)
-            self.beta = np.random.normal(0, np.sqrt(2/p), size=p) 
-         
+            self.beta = np.random.normal(0, np.sqrt(2/p), size=p)
+
+        self.set_Xy(X, y)
+
         # few iterations of coordinate descent
         all_p = np.array(range(p), dtype=np.int64)
 
-        # O(2p)
-        Aq, A = self.initial_active_set(
-            self.X, y, c1, 
-            self.Xj_T_y, 
-            self.Xj_T_Xj, 
-            self.X_T_X, 
-            all_p)
+        # O(2p + np*T_init) = O(np)
+        Aq, A = self.initial_active_set(c1, all_p)
+
         
         if len(A) == 0:
             # if the active set is empty
@@ -405,32 +393,39 @@ class Lasso:
         # print("Active set: ", A_rr)
 
         left_iter = self.max_iter - self.init_iter
+        
+        # O(T*c1*np + c2*p + c3*n) = O(np) for p >> n and T small,
+        # where T is the number of left iterations 
+        # and c1, c2, c3 are constants
+        # Small T are practially possible with the warm starts
+        # and thorough path of the lasso
         for i in range(left_iter):
 
-            diff = np.zeros(n)
+            # O(n)
+            s_diff = np.zeros(n)
             s_new = np.zeros(n)
-            self.cd_epoch(c1, A_rr, s_new, diff)
+            # O(np)
+            self.cd_epoch(c1, n, A_rr, s_new, s_diff)
 
-            # diff = s_new - s_old
-            max_updt = np.max(np.abs(diff))
+            # O(n)
+            max_updt = np.max(np.abs(s_diff))
             w_max = np.max(np.abs(s_new))
 
             if self._verbose:
                 print("iteration:", i,"Max update: ", max_updt, "Max weight: ", w_max)
+
             if w_max == 0 or max_updt/w_max < self.tol:
                 
                 # O(3p)
                 Ac_arr = self.get_sorted_complement(A, all_p)
 
                 #TODO: streamline updt. beta and exclusion test
-                self.update_beta(c1, 
-                                 self.Xj_T_y, 
-                                 self.Xj_T_Xj,
-                                 self.X_T_X, 
-                                 Ac_arr)
-                # O(np + p)
+                # O(np)
+                self.update_beta(c1, n, all_p)
+
+                # O(np + p) = O(np)
                 # A_c that failed the exclusion test
-                Ac_f_arr = self.exclusion_test(self.X, y, c1, Ac_arr)
+                Ac_f_arr = self.exclusion_test(self.X, c1, Ac_arr)
                 Ac_f = set(Ac_f_arr)
                 
 
@@ -443,6 +438,7 @@ class Lasso:
                     break
 
                 else:
+                    # O(np + n + p) = O(np)
                     w_d_gap = self.dual_gap(y)
                     if w_d_gap < self.tol:
                         if self._verbose:
@@ -452,9 +448,8 @@ class Lasso:
                     else:
                         # O(3p)
                         Anew = self.update_sorted_active_set(A, Ac_f, all_p)
-                        # O(p)
+                        # O(2p)
                         A = set(Anew)
-                        # O(p)
                         A_rr = np.array(Anew, dtype=np.int64)
 
         if i == left_iter - 1:
@@ -464,18 +459,15 @@ class Lasso:
             print("Model did not converge")
 
         if self.fit_intercept:
-            self.intercept = np.mean( y - self.sparse_XB(X) )
-            # print("Intercept: ", self.intercept)
+            self.intercept = np.mean( self.r )
 
-    def cd_epoch(self, c1, chosen_ps, s_new, diff):
-        epoch_lasso(self.X, self.beta, self.lam, c1,
-                     self.Xj_T_y, self.Xj_T_Xj, self.X_T_X, 
-                     chosen_ps, s_new, diff)
+    def cd_epoch(self, c1, n, chosen_ps, s_new, s_diff):
+        epoch_lasso_v2(
+            self.X, self.beta, self.lam, self.r,
+            c1, n, chosen_ps, s_new, s_diff
+        )
 
-    def update_beta(self, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps):
-        update_beta_lasso(self.beta, self.lam, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps)
-
-    def exclusion_test(self, X, y, c1, A_c_arr):
+    def exclusion_test(self, X, c1, A_c_arr):
         """
         Exclusion test (SLS book, page 114)
 
@@ -518,14 +510,11 @@ class Lasso:
         if len(A_c_arr) == 0:
             return A_c_arr
         
-
-        r = y - self.sparse_XB(X) # O(np)
-
         # exclusion test (SLS book, page 114) based on
         # KTT conditions
 
         # O(np)
-        e_test = c1 * np.abs( np.matmul( X.T[A_c_arr, :], r) ) >= self.lam
+        e_test = c1 * np.abs( np.matmul( X.T[A_c_arr, :], self.r) ) >= self.lam
         # those that are in the new active set
         # are those who did not pass the KTT conditions.
         # true means that they failed the exclusion
@@ -533,25 +522,11 @@ class Lasso:
         
         return A_c_arr[e_test] # O(p)
 
-    def sequential_strong_rule(self, X, y, c1, all_p):
-        """
-        rule based on the dual polytope projection 
-        and futher modified by the strong rule
-        showed at SLS book page 128
-        """
-        A_ = np.array(all_p)
-
-        r = y - self.sparse_XB(X)
-
-        # sequential strong rule (SLS book, page 128)
-        e_test = c1 * np.abs( np.matmul( X.T[A_, :], r) ) >= 2*self.lam - self.prev_lam
-        return A_[e_test]
-    
     def predict(self, X):
         if self.beta is None:
             raise Exception("Model has not been fitted yet.")
         
-        return self.sparse_XB(X) + self.intercept
+        return X @ self.beta + self.intercept
     
     def score(self, X, y):
         y_pred = self.predict(X)
@@ -588,6 +563,7 @@ class Lasso:
     def set_beta(self, beta):
         self.beta = beta
 
+# region: ElasticNet
 class ElasticNet(Lasso):
     def __init__(self, 
                  max_iter=300, 
@@ -695,6 +671,9 @@ class ElasticNet(Lasso):
         # those that are in the new active set
         # are those who did pass the KTT conditions
         return A_[elastic_test]
+# endregion
+
+# region: Cross-validation
 
 def k_fold_cv(X, y, model, num_folds):
     n, p = X.shape
@@ -771,7 +750,6 @@ def k_fold_cv_random(X, y,
 
     return best_[0]
 
-
 def lasso_path(X_train, y_train, params, model, print_progress = True):
     """
     compute the lasso path based on the training set
@@ -829,8 +807,7 @@ def split_data(X,y,num_test, seed = 123):
     y_train, y_test = y[train_idx]  , y[test_idx]
 
     return X_train, X_test, y_train, y_test
-
-
+    
 def get_non_zero_coeffs(path, ZO, thresh = 0.5):
     n_features = path.shape[0]
     string_version = []
@@ -859,19 +836,23 @@ def get_non_zero_coeffs(path, ZO, thresh = 0.5):
                 non_zero_coeffs.append(non_zero_idx)
 
     return non_zero_coeffs
-
+# endregion
 
 
 # import numpy as np
+# import time
 # np.random.seed(12038)
-# n = 200
-# X = np.random.randn(n, 500)
+# n = 400
+# p = 8000
+# X = np.random.randn(n, p)
 # y = np.random.randn(n)
 # n = len(y)
 
 # X_train, X_test, y_train, y_test = split_data(X, y, 20)
 
-# self = Lasso(max_iter=1000, lam=0.1, seed=122)
-# # self._verbose = False
+# self = Lasso(max_iter=1000, lam=.1, seed=123, tol=1e-4)
+# self._verbose = False
+# start = time.time()
 # self.fit(X_train, y_train)
-# print(self.beta)
+# print("Time: ", time.time() - start)
+# print(np.sum(self.beta != 0))
