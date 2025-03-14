@@ -182,7 +182,7 @@ def duality_gap_elnet(R, X, y, beta, lam_1_alpha, lam_alpha):
     norm_inf = np.linalg.norm(X.T @ rt  - lam_1_alpha*beta, ord=np.inf)
 
     # f = dualpa_max(norm_inf, lam_alpha)
-    f = norm_inf if norm_inf < lam_alpha else lam_alpha
+    f = norm_inf if norm_inf > lam_alpha else lam_alpha
     c2 = lam_alpha/f
 
     d_obj   = (2/n) * c2 * np.dot(R, y) - (c2**2) * (c1 * R_norm_sq + (lam_1_alpha/2)*b_norm_sq)
@@ -207,7 +207,7 @@ def dualpa_elnet(R, X, y, beta, lam_1_alpha, lam_alpha, ny2):
     norm_inf = np.linalg.norm(X.T @ rt  - lam_1_alpha*beta, ord=np.inf)
 
     # f = dualpa_max(norm_inf, lam_alpha)
-    f = norm_inf if norm_inf < lam_alpha else lam_alpha
+    f = norm_inf if norm_inf > lam_alpha else lam_alpha
     c2 = lam_alpha/f
     c3 = 1 + c2**2
 
@@ -928,3 +928,27 @@ def get_non_zero_coeffs(path, ZO, thresh = 0.5):
     return non_zero_coeffs
 
 
+# import numpy as np
+# import time
+# seed = 12037
+# np.random.seed(seed)
+# n = 500
+# p = 6000
+# X = np.random.randn(n, p)
+# y = np.random.randn(n) + 2
+# n = len(y)
+
+# X_train, X_test, y_train, y_test = split_data(X, y, 100)
+# X_train = (X_train - np.mean(X_train, axis=0)) / np.std(X_train, axis=0)
+# X_test = (X_test - np.mean(X_test, axis=0)) / np.std(X_test, axis=0)
+
+
+# # self = Lasso(max_iter=1000, lam=.1, seed=seed, tol=1e-4)
+# self = ElasticNet(max_iter=1000, lam=.001, seed=seed, tol=1e-4, alpha=0.9, fit_intercept=True)
+# self._verbose = False
+# start = time.time()
+# self.fit(X_train, y_train)
+# print("Time: ", time.time() - start)
+# print(np.sum(self.beta != 0))
+# test_error = self.score(X_test, y_test)
+# print("Test error: ", test_error)
