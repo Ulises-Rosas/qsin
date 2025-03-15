@@ -222,10 +222,10 @@ def dualpa(X, y, R, lam, beta, ny2):
 def dualpa_elnet(R, X, y, beta, lam_1_alpha, lam_alpha, ny2):
     
     if lam_1_alpha == 0:
-        return dualpa(X, y, lam_alpha, beta, ny2)
+        return dualpa(X, y, R, lam_alpha, beta, ny2)
 
     n = len(y)
-    b_norm_sq = (beta**2).sum()
+    b_norm_sq = np.dot(beta, beta)
 
     rt = (2/n) * R
     norm_inf = np.linalg.norm(X.T @ rt  - lam_1_alpha*beta, ord=np.inf)
