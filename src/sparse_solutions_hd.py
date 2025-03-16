@@ -5,14 +5,9 @@ from collections import deque
 
 
 import numpy as np
-from numba import njit
 from qsin.utils import progressbar
 from qsin.CD_dual_gap import (epoch_lasso_v2, update_beta_lasso_v2, dualpa,
                               epoch_enet_v2 , update_enet_v2, dualpa_elnet)
-
-
-def mse(y, X, B):
-    return np.mean( ( y - X.dot(B) )**2 ) 
 
 
 class Lasso:
@@ -53,7 +48,15 @@ class Lasso:
         self.ny2 = np.array([])
         self.r = np.array([])
 
-        self._verbose = True
+        self.y = np.array([])
+
+        self.x_bar = np.array([])
+        self.y_bar = 0.0
+
+        self.x_sd = np.array([])
+        self.y_sd = 1
+
+        self._verbose = False
     
     def update_beta(self, c1, n, all_p):
         update_beta_lasso_v2(
@@ -126,9 +129,39 @@ class Lasso:
             # this fast block access is important
             # for multiple dot products in the
             # coordinate descent
-            self.X = np.asfortranarray(X)
-            self.ny2 = np.linalg.norm(y)**2 # O(n)
-            self.r = np.ascontiguousarray(y - self.X @ self.beta) # O(np)
+            # XXX
+            # asfortranarray makes a copy of the array
+            self.X = np.asfortranarray(X) # O(np)
+            
+            # ascontiguousarray does not make a copy
+            # but ensures that the array is contiguous
+            self.y = np.ascontiguousarray(y.copy(), dtype=y.dtype) # O(n)
+            self.center_Xy() # O(np)
+
+            self.ny2 = np.dot(self.y, self.y) # O(n)
+            self.r = self.y - self.X @ self.beta # O(np)
+            self.r = np.ascontiguousarray(self.r, dtype=self.X.dtype) # O(n)
+        
+    def center_Xy(self):
+        """
+        center X and y
+        """
+        self.x_bar = np.mean(self.X, axis=0, dtype=self.X.dtype) # O(np)
+        self.x_sd  = np.std(self.X , axis=0, dtype=self.X.dtype) # O(np)
+        
+        zero_sd_indices = self.x_sd == 0 # O(p)
+        if np.any(zero_sd_indices): # O(p)
+            self.x_sd[zero_sd_indices] = 1 # O(p)
+
+        self.X = (self.X - self.x_bar) / self.x_sd # O(np)
+
+        # self.y_sd = np.std(y) # O(n)
+        # if self.y_sd == 0:
+        #     self.y_sd = 1
+
+        self.y_bar = np.mean(self.y) # O(n)
+        self.y -= self.y_bar # O(n)
+        # self.y /= self.y_sd
 
     def dual_gap(self, y):
         return dualpa(self.X, y, self.r, self.lam, self.beta, self.ny2)
@@ -179,8 +212,9 @@ class Lasso:
             # self.beta = np.random.normal(0, np.sqrt(2/p), size=p)
             
             # zero initialization
-            self.beta = np.zeros(p)
+            self.beta = np.zeros(p, dtype=X.dtype, order='F')
 
+        # XXX, O(np)
         self.set_Xy(X, y)
 
         # few iterations of coordinate descent
@@ -194,7 +228,7 @@ class Lasso:
             # if the active set is empty
             # then the model is converged
             if self.fit_intercept:
-                self.intercept = np.mean( y )
+                self.intercept = np.mean( self.y )
             return
 
         A_rr = np.array(Aq)
@@ -254,7 +288,7 @@ class Lasso:
 
                 else:
                     # O(np + n + p) = O(np)
-                    w_d_gap = self.dual_gap(y)
+                    w_d_gap = self.dual_gap(self.y)
                     if w_d_gap < self.tol:
                         if self._verbose:
                             print('dual, finished at iteration: ', i)
@@ -274,7 +308,11 @@ class Lasso:
             print("Model did not converge")
 
         if self.fit_intercept:
-            self.intercept = np.mean( self.r )
+            # this scaling will consider the unscaled
+            # data. The optimization was done assuming the
+            # scaled data. 
+            self.beta /= self.x_sd
+            self.intercept = self.y_bar - np.dot(self.x_bar, self.beta) # O(p)
 
     def cd_epoch(self, c1, n, chosen_ps, s_new, s_diff):
         epoch_lasso_v2(
