@@ -1,24 +1,13 @@
 
-import copy
 import random
 
 import numpy as np
-from numba import njit
 from qsin.utils import progressbar
 from qsin.CD_dual_gap import (epoch_lasso, update_beta_lasso, dualpa, 
-                              epoch_enet,  update_beta_enet, dualpa_elnet,)
+                              epoch_enet , update_beta_enet , dualpa_elnet)
 
-# @njit
 def sparse_XB(X, B):
     return np.matmul(X, B)
-
-# standarize data
-def std_data(X):
-    return (X - np.mean(X, axis=0)) / np.std(X, axis=0)
-
-def mse(y, X, B):
-    return np.mean( ( y - X.dot(B) )**2 ) 
-
 
 class Lasso:
     """
@@ -59,6 +48,15 @@ class Lasso:
         self.Xj_T_Xj = np.array([])
         self.Xj_T_y = np.array([])
         self.ny2 = np.array([])
+
+        self.y = np.array([])
+
+        self.x_offset = np.array([])
+        self.y_offset = 0.0
+
+        self.x_scale = np.array([])
+        self.y_scale = 1
+
         
     def initial_iterations(self, c1, Xj_T_y, Xj_T_Xj, X_T_X, all_p):
 
@@ -111,12 +109,32 @@ class Lasso:
             pass
 
         else:
-            self.X = X
+            self.X = X.copy()
+            self.y = y.copy()
+            self.center_Xy()
+
             # optimal for dot products in CD
-            self.X_T_X = np.asfortranarray(np.matmul(X.T, X))
+            self.X_T_X = np.asfortranarray( np.matmul(self.X.T, self.X) )
             self.Xj_T_Xj = np.diag(self.X_T_X)
-            self.Xj_T_y = np.matmul(X.T, y)
-            self.ny2 = np.linalg.norm(y)**2
+            self.Xj_T_y = np.matmul(self.X.T, self.y)
+            self.ny2 = np.dot(self.y, self.y)
+
+    def center_Xy(self):
+        """
+        center X and y
+        """
+        self.x_offset = np.mean(self.X, axis=0, dtype=self.X.dtype) # O(np)
+        self.x_scale  = np.std(self.X , axis=0, dtype=self.X.dtype) # O(np)
+        
+        zero_sd_indices = self.x_scale == 0 # O(p)
+        if np.any(zero_sd_indices): # O(p)
+            self.x_scale[zero_sd_indices] = 1 # O(p)
+
+        self.X = (self.X - self.x_offset) / self.x_scale # O(np)
+
+        self.y_offset = np.mean(self.y) # O(n)
+        self.y -= self.y_offset # O(n)
+
 
     def dual_gap(self, y):
         return dualpa(self.X, y, self.lam, self.beta, self.ny2)
@@ -141,7 +159,7 @@ class Lasso:
             # np.random.seed(self.seed)
             # self.beta = np.random.normal(0, np.sqrt(2/p), size=p) 
 
-            self.beta = np.zeros(p)  
+            self.beta = np.zeros(p, dtype=self.X.dtype, order='F')  
          
         # few iterations of coordinate descent
         all_p = np.array(range(p))
@@ -199,7 +217,7 @@ class Lasso:
 
                     # R = y - self.sparse_XB(self.X)
                     # w_d_gap = dualpaR(R, self.X, y, self.lam, self.beta)
-                    w_d_gap = self.dual_gap(y)
+                    w_d_gap = self.dual_gap(self.y)
                     # w_d_gap = dualpa(self.X, y, self.lam, self.beta)
 
                     if w_d_gap < self.tol:
@@ -217,7 +235,8 @@ class Lasso:
             print("Model did not converge")
 
         if self.fit_intercept:
-            self.intercept = np.mean( y - self.sparse_XB(X) )
+            self.beta /= self.x_scale
+            self.intercept = self.y_offset - np.dot(self.x_offset, self.beta) # O(p)
             # print("Intercept: ", self.intercept)
 
     def cd_epoch(self, c1, chosen_ps, s_new, diff):
