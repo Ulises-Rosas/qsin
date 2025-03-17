@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-# placeholder for the model
 import time
-import numpy as np
 import argparse
 
 
-from qsin.sparse_solutions import ElasticNet, lasso_path
-from qsin.utils import  calculate_test_errors, max_lambda, _scaler
+import numpy as np
+# from qsin.sparse_solutions import ElasticNet, lasso_path
+from qsin.sparse_solutions_hd import ElasticNet, lasso_path
+from qsin.utils import  calculate_test_errors, max_lambda
 from qsin.isle_path import split_data_isle, get_new_path
 from qsin.ElasticNetCV import ElasticNetCV_alpha
 
@@ -154,7 +154,12 @@ def re_center_for_isle(T_test, T_train):
     """
 
     u = np.mean(T_train, axis=0)
-    sd = np.std(T_train, axis=0)    
+    sd = np.std(T_train, axis=0)
+    
+    sd_zero = sd == 0
+    if np.any(sd_zero):
+        sd[sd_zero] = 1
+
     return (T_test - u)/sd, (T_train - u)/sd
 
 def main():
@@ -237,7 +242,6 @@ def main():
 
 
     num_test = int(n*args.p_test)
-
     start = time.time()
 
     (X_train,X_test,
@@ -251,8 +255,8 @@ def main():
             verbose=args.verbose, nstdy = args.nstdy)
     
     if args.isle:
-        # re-scale for ISLE. This is necessary because the ISLE
-        # assumes there is an intercept term in the model
+        # standarize for ISLE post-processing uses lasso/elnet
+        # and lasso/elnet assumes the data is standarized
         if args.verbose:
             print("Re-standarize data for ISLE")
         X_test, X_train = re_center_for_isle(X_test, X_train)
@@ -291,7 +295,7 @@ def main():
     #     assert not args.cv, "If cv is true, then alpha must be a list."
     #     assert args.alpha > 0 and args.alpha <= 1, "Alpha must be between 0 and 1."
 
-    model = ElasticNet(fit_intercept=False, 
+    model = ElasticNet(fit_intercept=True, 
                         max_iter=args.max_iter,
                         init_iter=1, 
                         copyX=True, 
