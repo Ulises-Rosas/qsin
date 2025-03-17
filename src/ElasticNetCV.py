@@ -4,7 +4,8 @@ import numpy as np
 import multiprocessing as mp
 
 from qsin.utils import calculate_test_errors
-from qsin.sparse_solutions import ElasticNet, lasso_path
+# from qsin.sparse_solutions import ElasticNet, lasso_path
+from qsin.sparse_solutions_hd import ElasticNet, lasso_path
 
 def error_fn(tmp_alpha,
              args = None, i = None, 
@@ -16,7 +17,7 @@ def error_fn(tmp_alpha,
     if args.verbose:
         print("Fold: ", i, " alpha: ", tmp_alpha)
 
-    model = ElasticNet(fit_intercept = False,
+    model = ElasticNet(fit_intercept = True,
                        max_iter = args.max_iter,
                        init_iter = 1,
                        copyX = True,
