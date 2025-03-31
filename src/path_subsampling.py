@@ -291,10 +291,6 @@ def main():
         assert not args.cv, "If alpha is a single value, then cv must be False."
         args.alpha = args.alpha[0]
             
-    # else:
-    #     assert not args.cv, "If cv is true, then alpha must be a list."
-    #     assert args.alpha > 0 and args.alpha <= 1, "Alpha must be between 0 and 1."
-
     model = ElasticNet(fit_intercept=True, 
                         max_iter=args.max_iter,
                         init_iter=1, 
