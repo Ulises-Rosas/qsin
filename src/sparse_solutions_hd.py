@@ -149,19 +149,15 @@ class Lasso:
         self.x_bar = np.mean(self.X, axis=0, dtype=self.X.dtype) # O(np)
         self.x_sd  = np.std(self.X , axis=0, dtype=self.X.dtype) # O(np)
         
+        # avoid division by zero
         zero_sd_indices = self.x_sd == 0 # O(p)
         if np.any(zero_sd_indices): # O(p)
             self.x_sd[zero_sd_indices] = 1 # O(p)
 
         self.X = (self.X - self.x_bar) / self.x_sd # O(np)
 
-        # self.y_sd = np.std(y) # O(n)
-        # if self.y_sd == 0:
-        #     self.y_sd = 1
-
         self.y_bar = np.mean(self.y) # O(n)
         self.y -= self.y_bar # O(n)
-        # self.y /= self.y_sd
 
     def dual_gap(self, y):
         return dualpa(self.X, y, self.r, self.lam, self.beta, self.ny2)
@@ -311,6 +307,8 @@ class Lasso:
             # this scaling will consider the unscaled
             # data. The optimization was done assuming the
             # scaled data. 
+            # If x_sd ever had a zero value, then
+            # it was replaced by 1.
             self.beta /= self.x_sd
             self.intercept = self.y_bar - np.dot(self.x_bar, self.beta) # O(p)
 
