@@ -160,25 +160,37 @@ end
 
 function simlated_QLL(networks, buckyCFfile, outputfile)
 
-    # buckyCFfile = "/Users/ulises/Desktop/SLL/SparseQuartets/1_seqgen.CFs_n15.csv"
-    # netfile = "/Users/ulises/Desktop/ABL/comps/claudia/UnderstandingNetworks/n15_sim_v2/test_500.txt"
-    # netfile2 = "/Users/ulises/Desktop/ABL/comps/claudia/UnderstandingNetworks/n15_sim_v2/test_499.txt"
-    # networks = [ netfile2, netfile]
+    # buckyCFfile = "./test_data/1_seqgen.CFs_n15.csv"
+    # netfile = "./test_data/n15_sim_netv2/n15_sim_netv2_sim2796.txt"
 
     @everywhere function process_network(netfile, all_buckyCF, dat)
-        netstart = readTopology(netfile)
+        # O(1)
+        netstart = readTopology(netfile) # O(n)
+
         try
-            topologyQPseudolik!(netstart, all_buckyCF)
+            # branch lengths from simulation are clock time-based
+            # and the time snaq considers branch lengths on
+            # coalescent units. For that reason we use 
+            # topologyMaxQPseudolik!
+
+            # it returns a new network with updated branch lengths
+            # and gamma values, which is not stored in any variable here.
+            # The original network is not modified.
+            # However, what is modified is all_buckyCF
+            topologyMaxQPseudolik!(netstart, all_buckyCF) 
+            
+            # we transform all_buckyCF into a proper format
             df_long = fittedQuartetCF(all_buckyCF, :long)
             return iter_df(dat.ngenes, df_long)
-        catch
-            println("Error in ", netfile)
+        catch e
+            println("Error in ", netfile, ": ", e)
             return DataFrame()
         end
     end
 
     function simlated_QLL(networks, buckyCFfile, outputfile)
-        # buckyCFfile = "/Users/ulises/Desktop/SLL/SparseQuartets/1_seqgen.CFs_n15.csv"
+
+
         all_buckyCF = readTableCF(buckyCFfile)
         dat = DataFrame(CSV.File(buckyCFfile); copycols=false)
 
