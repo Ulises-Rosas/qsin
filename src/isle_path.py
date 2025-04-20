@@ -143,7 +143,7 @@ def split_data_isle(X, y, num_test, seed,
 
     if isle:
         n, p = X_train.shape
-        model = make_init_model(max_features=round(p * mx_p), max_depth=max_depth, max_leaves=max_leaves, param_file=param_file)
+        model = make_init_model(max_features= mx_p, max_depth=max_depth, max_leaves=max_leaves, param_file=param_file)
 
         start = time.time()
         F_train, estimators = make_isle_ensemble(X_train, y_train, model, eta, nu, M, seed=seed)

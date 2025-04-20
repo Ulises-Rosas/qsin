@@ -162,7 +162,17 @@ def re_center_for_isle(T_test, T_train):
 
     return (T_test - u)/sd, (T_train - u)/sd
 
+
+def max_features_type(value):
+    try:
+        return float(value) if value not in ['sqrt', 'log2'] else value
+    
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Invalid value for --max_features: {value}. Must be a float, 'sqrt', or 'log2'.")
+
 def main():
+
+
     parser = argparse.ArgumentParser(description="""
     Generate batches from ElasticNet path.
     """, 
@@ -189,7 +199,7 @@ def main():
     isle_args.add_argument("--M", type=int, default=500, metavar="", help="Number of trees in the ensemble.")
     isle_args.add_argument("--max_depth", type=int, default=2, metavar="", help="Maximum depth of the decision tree.")
     isle_args.add_argument("--max_leaf_nodes", type=int, default=6, metavar="", help="Maximum number of leaf nodes in the decision tree.")
-    isle_args.add_argument("--max_features", type=float, default=1/2, metavar="", help="Maximum proportion of features to use in each tree.")
+    isle_args.add_argument("--max_features", type=max_features_type, default=0.5, metavar="", help="Maximum proportion of features it is considered to grow nodes in a regression tree. It can also be 'sqrt' or 'log2'.")
     isle_args.add_argument("--param_file", type=str, default=None, metavar="", help="""JSON file with parameters for the decision tree
                            different from max_depth and mx_p. The decision trees are made using
                            sklearn's DecisionTreeRegressor. Then a complete list of parameters can be found
@@ -230,7 +240,7 @@ def main():
     assert args.seed >= 0, "Seed must be greater or equal to 0."
     assert args.M > 0, "Number of trees in the ensemble must be greater than 0."
     assert args.max_depth > 0, "Maximum depth of the decision tree must be greater than 0."
-    assert args.max_features > 0 and args.max_features <= 1, "Maximum proportion of features must be between 0 and 1."
+    assert (isinstance(args.max_features, float) and args.max_features > 0 and args.max_features <= 1) or args.max_features in ['sqrt', 'log2'], "Maximum proportion of features must be between 0 and 1 or 'sqrt' or 'log2'."
     assert args.eta > 0 and args.eta <= 1, "Proportion of observations to use in each tree must be between 0 and 1."
     assert args.nu >= 0 and args.nu <= 1, "Learning rate must be between 0 and 1."
     assert args.prefix != "", "Prefix must not be empty."
