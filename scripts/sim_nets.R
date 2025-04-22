@@ -76,15 +76,18 @@ inheritance.fxn <- make.beta.draw(10,10)
 
 
 #We also want to set the proportion of each type of hybrid event
-hybrid_proportions <-c(0.99,  ##Lineage Generative
-                       0.15, ##Lineage Degenerative
-                       0.15) ##Lineage Neutral
-
+# hybrid_proportions <-c(0.99,  ##Lineage Generative
+#                        0.15, ##Lineage Degenerative
+#                        0.15) ##Lineage Neutral
+hybrid_proportions <-c(1,  ##Lineage Generative
+                       0.0, ##Lineage Degenerative
+                       0.0) ##Lineage Neutral
 
 
 
 # N = 200
-nu = exp(1.6)/(N*(N-1)/2) # level 1 nets
+# nu = exp(1.6)/(N*(N-1)/2) # level 1 nets
+nu = 2/(N*(N-1)/2) # level 1 nets
 
 net_names <- function(net){
   # net$tip.label <- as.numeric(sub('t', '', net$tip.label))
