@@ -8,6 +8,10 @@ nets = [];
 outfile = "qlls.csv";
 ncores = 1;
 
+ftolRel = 1e-6
+ftolAbs = 1e-6
+xtolAbs = 1e-3
+xtolRel = 1e-2
 
 function help_func()
     # make a help message
@@ -26,7 +30,12 @@ function help_func()
 
     Optional arguments:
         --outfile outfile: str; output file name. (default: $outfile)
+        --ftolRel: float; relative tolerance for the objective function (default: $ftolRel)
+        --ftolAbs: float; absolute tolerance for the objective function (default: $ftolAbs)
+        --xtolRel: float; relative tolerance for parameter changes (default: $xtolRel)
+        --xtolAbs: float; absolute tolerance for parameter changes  (default: $xtolAbs)
         --ncores: int; number of cores (default: $ncores)        
+        --help: display this help message
 """;
     println(help_message);
     exit(0);    
@@ -57,7 +66,19 @@ for i in eachindex(ARGS)
 
         elseif ARGS[i] == "--outfile"
             global outfile = ARGS[i+1];
-    
+
+        elseif ARGS[i] == "--ftolRel"
+            global ftolRel = parse(Float64, ARGS[i+1]);
+        
+        elseif ARGS[i] == "--ftolAbs"
+            global ftolAbs = parse(Float64, ARGS[i+1]);
+        
+        elseif ARGS[i] == "--xtolRel"
+            global xtolRel = parse(Float64, ARGS[i+1]);
+        
+        elseif ARGS[i] == "--xtolAbs"
+            global xtolAbs = parse(Float64, ARGS[i+1]);
+
         elseif ARGS[i] == "--help" || ARGS[i] == "-h"
             help_func();
         end
@@ -158,13 +179,14 @@ end
 end
 
 
-function simlated_QLL(networks, buckyCFfile, outputfile)
+function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtolRel, xtolAbs)
 
     # buckyCFfile = "./test_data/1_seqgen.CFs_n15.csv"
     # netfile = "./test_data/n15_sim_netv2/n15_sim_netv2_sim2796.txt"
 
-    @everywhere function process_network(netfile, all_buckyCF, dat)
+    @everywhere function process_network(netfile, all_buckyCF, dat, ftolRel, ftolAbs, xtolRel, xtolAbs)
         # O(1)
+
         netstart = readTopology(netfile) # O(n)
 
         try
@@ -177,38 +199,35 @@ function simlated_QLL(networks, buckyCFfile, outputfile)
             # and gamma values, which is not stored in any variable here.
             # The original network is not modified.
             # However, what is modified is all_buckyCF
-            topologyMaxQPseudolik!(netstart, all_buckyCF) 
+            topologyMaxQPseudolik!(netstart, all_buckyCF, 
+                                    ftolRel = ftolRel, 
+                                    ftolAbs = ftolAbs, 
+                                    xtolRel = xtolRel, 
+                                    xtolAbs = xtolAbs)
+            # println(new_net)
             
             # we transform all_buckyCF into a proper format
             df_long = fittedQuartetCF(all_buckyCF, :long)
-            return iter_df(dat.ngenes, df_long)
+            result = iter_df(dat.ngenes, df_long)
+            return result
         catch e
             println("Error in ", netfile, ": ", e)
             return DataFrame()
         end
     end
 
-    function simlated_QLL(networks, buckyCFfile, outputfile)
+    all_buckyCF = readTableCF(buckyCFfile)
+    dat = DataFrame(CSV.File(buckyCFfile); copycols=false)
 
+    main_df = @distributed (vcat) for netfile in networks
+        println(netfile)
 
-        all_buckyCF = readTableCF(buckyCFfile)
-        dat = DataFrame(CSV.File(buckyCFfile); copycols=false)
-
-        main_df = @distributed (vcat) for netfile in networks
-            println(netfile)
-
-            dat_tmp = deepcopy(dat)
-            all_buckyCF_tmp = deepcopy(all_buckyCF)
-            process_network(netfile, all_buckyCF_tmp, dat_tmp)
-
-            # process_network(netfile, all_buckyCF, dat)
-        end
-        CSV.write(outputfile, main_df)
+        dat_tmp = deepcopy(dat)
+        all_buckyCF_tmp = deepcopy(all_buckyCF)
+        process_network(netfile, all_buckyCF_tmp, dat_tmp, ftolRel, ftolAbs, xtolRel, xtolAbs)
     end
-
-    simlated_QLL(networks, buckyCFfile, outputfile)
+    CSV.write(outputfile, main_df)
 
 end
 
-
-@time simlated_QLL(nets, CFfile, outfile)
+@time evaluate_sims(nets, CFfile, outfile, ftolRel, ftolAbs, xtolRel, xtolAbs)
