@@ -1,6 +1,7 @@
 import time
 import json
 from copy import deepcopy
+from collections import deque
 
 from qsin.sparse_solutions import split_data
 from qsin.utils import progressbar, standardize_Xy
@@ -16,39 +17,35 @@ def Sm(X, y, f_m, sample_size, replace = False, seed = 12038):
     test_idx  = np.random.choice(range(n), size = sample_size, replace = replace)
     return X[test_idx,:], y[test_idx], f_m[test_idx]
 
-def make_isle_ensemble(X_train, y_train, model, eta, nu, M, seed = 12038, verbose = True):
-    np.random.seed(seed)
-
+def make_isle_ensemble(X_train, y_train, model, eta, nu,
+                      M, rng = None, verbose = True):
+    
 
     n_train = X_train.shape[0]
-    # n_test = X_test.shape[0]
-    f_m = np.repeat(np.mean(y_train), n_train)
-
-    F_train = np.zeros((n_train,M))
-    # F_test = np.zeros((n_test,M))
-
-    rs = [seed + i for i in range(M)]
-    estimators = []
-
     train_sample_size = int(n_train*eta)
-
     if verbose:
         print("Starting ISLE ensemble")
         print("Random sample size for trees: ", train_sample_size)
-     
+
+    # initialize memory function
+    f_m = np.repeat(np.mean(y_train), n_train)
+
+    F_train = np.zeros((n_train,M))
+    estimators = deque()
     for i in progressbar(range(M), "Computing trees: ", 40):
 
-        model.set_params(random_state =  rs[i])
+        model.set_params(random_state = rng)
+        # random sample the data, including the memory function
         X_sm, y_sm, f_sm = Sm(X_train, y_train, f_m, train_sample_size, replace=False)
-
-
+        # fit the model. O(p n log(n)), 
+        # where p is considered number of features
         model.fit(X_sm + f_sm.reshape(-1,1), y_sm )
+        
+        # update memory function
         f_m = f_m + nu*model.predict(X_train)
         
-        # X_sm.shape
-        F_train[:,i] = model.predict(X_train)
-        # F_test[:,i] = model.predict(X_test)
-        estimators.append(deepcopy(model))
+        F_train[:,i] = model.predict(X_train)  # O(n)
+        estimators.append(deepcopy(model)) # O(1)
 
     return F_train, estimators
 
@@ -73,8 +70,10 @@ def make_init_model(max_features = None, max_depth = 5, max_leaves = 6, param_fi
 def make_F_test(X_test, estimators):
     M = len(estimators)
     F_test = np.zeros((X_test.shape[0], M))
+    
+    # O(nM)
     for i,m in enumerate(estimators):
-        F_test[:,i] = m.predict(X_test)
+        F_test[:,i] = m.predict(X_test) # O(n)
     return F_test
 
 
@@ -101,8 +100,12 @@ def split_data_isle(X, y, num_test, seed,
         Whether to apply ISLE.
     nwerror : bool
         Whether to use the entire dataset for training.
-    mx_p : float
-        Maximum proportion of features to use in each tree.
+    mx_p : int or str
+        Maximum number of features to use in each tree.'
+        This follows the sklearn convention.
+        If 'sqrt', then max_features = sqrt(p).
+        If 'log2', then max_features = log2(p).
+        If None, then max_features = p.
     max_depth : int
         Maximum depth of the decision tree.
     max_leaves : int
@@ -131,6 +134,7 @@ def split_data_isle(X, y, num_test, seed,
     y_test : array-like
         Testing target vector.
     """
+    rng = np.random.RandomState(seed)
 
     if nwerror:
         X_train, y_train = X, y
@@ -142,11 +146,12 @@ def split_data_isle(X, y, num_test, seed,
     X_train, X_test, y_train, y_test = standardize_Xy(X_train, y_train, X_test, y_test, nstdy)
 
     if isle:
-        n, p = X_train.shape
-        model = make_init_model(max_features= mx_p, max_depth=max_depth, max_leaves=max_leaves, param_file=param_file)
+        # initialize model without random state
+        # this is later set in the ensemble loop
+        model = make_init_model(max_features = mx_p, max_depth=max_depth, max_leaves=max_leaves, param_file=param_file)
 
         start = time.time()
-        F_train, estimators = make_isle_ensemble(X_train, y_train, model, eta, nu, M, seed=seed)
+        F_train, estimators = make_isle_ensemble(X_train, y_train, model, eta, nu, M, rng=rng)
         end_isle = time.time() - start
 
         if verbose:
