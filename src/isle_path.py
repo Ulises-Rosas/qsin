@@ -47,7 +47,7 @@ def make_isle_ensemble(X_train, y_train, model, eta, nu,
         F_train[:,i] = model.predict(X_train)  # O(n)
         estimators.append(deepcopy(model)) # O(1)
 
-    return F_train, estimators
+    return F_train, list(estimators) # O(M)
 
 def make_init_model(max_features = None, max_depth = 5, max_leaves = 6, param_file = None):
 
@@ -204,112 +204,4 @@ def get_new_path(estimators, path,p):
         new_path[:,j] = np.linalg.norm(tmp_ensemble_fi, axis = 1, ord = np.inf)
 
     return new_path
-
-
-
-# from comparing_solutions import _scaler, ElasticNet, lasso_path, max_lambda, rmse
-# file = './test_sims/test_n15_qll.csv'
-# CT_file = './1_seqgen.CFs_n15.csv'
-
-# data = np.loadtxt(file, delimiter=',',skiprows=1, )
-# X,y = data[:,:-1], data[:,-1]
-# n,p = X.shape
-
-
-
-# nwerror = False
-# isle = True
-
-# # elastic net parameters
-# # alpha = 0.999
-# alpha = 0.999
-# e =  0.001
-# K = 100
-
-# # decision tree parameters
-# mx_p = 1/2
-# max_depth = 5
-# param_file = None
-
-# # isle parameters
-# # eta = 0.5
-# eta = 0.1
-# nu = 0.1
-# M = 500
-
-# seed = 12038
-# verbose = True
-
-
-
-# X = _scaler(X, X, sted = True)
-# y = _scaler(y, y, sted = True)
-
-
-# num_test = int(n*0.35)
-
-# (X_train,X_test,
-#  y_train,y_test,
-#  estimators) = split_data_isle(X, y, 
-#                     num_test=num_test, seed=seed,
-#                     isle=True, nwerror=False, 
-#                     mx_p=mx_p, max_depth=max_depth, param_file=None, 
-#                     eta=eta, nu=nu, M=M,
-#                     verbose=True)
-
-
-# max_lam = max_lambda(X_train, y_train, alpha=alpha)
-# min_lam = max_lam * e
-# params = {'lam': np.logspace(np.log10(min_lam), np.log10(max_lam), K, endpoint=True)[::-1]}
-
-# model = ElasticNet(fit_intercept=False, 
-#                     max_iter=1000,
-#                     init_iter=1, 
-#                     copyX=True, 
-#                     alpha=alpha, 
-#                     tol=0.00001)
-
-# start = time.time()
-# path = lasso_path(X_train, y_train, params, model, sequential_screening=False)
-# end_lasso = time.time() - start
-# print("Elastic net path done: ", end_lasso, " seconds")
-
-
-# lam_path = np.concatenate((params['lam'].reshape(-1, 1), path.T), axis=1)
-# test_errors = np.zeros((path.shape[1], 2))
-# for j in range(path.shape[1]):
-#     beta_j = path[:, j]
-#     rmse_j = rmse( y_test, X_test, beta_j)
-#     test_errors[j, :] = [ params['lam'][j] , rmse_j]
-
-
-
-
-# from matplotlib import pyplot as plt
-# fs = 18
-# fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
-
-# # Upper panel - Coefficient plot
-
-# ax1.plot(lam_path[:,0], lam_path[:,1:], marker='o', alpha=0.8)
-# ax1.set_xscale('log')
-# ax1.set_ylabel('Coefficient', fontsize=fs)
-# ax1.axhline(0, color='black', lw=2)
-# ax1.set_title(f'Lasso Path ($\\alpha = {alpha}$)', fontsize=fs)
-
-
-# ax2.plot(test_errors[:,0], test_errors[:,1], marker='o', alpha=0.8, label='Weighted average error of selected trees')
-# ax2.set_xscale('log')
-# ax2.set_yscale('log')
-# ax2.set_xlabel('$\lambda$', fontsize=fs)
-# ax2.set_ylabel('RMSE', fontsize=fs)
-# ax2.legend()
-
-
-
-# new_path = get_new_path(estimators, path, p)
-# j_min = np.argmin(test_errors[:,0])
-# new_path_j = new_path[:,j_min]
-# np.sum(new_path_j != 0)
-
 
