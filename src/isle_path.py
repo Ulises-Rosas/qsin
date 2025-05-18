@@ -9,12 +9,13 @@ from qsin.utils import progressbar, standardize_Xy
 import numpy as np
 from sklearn.tree import DecisionTreeRegressor
 
-def Sm(X, y, f_m, sample_size, replace = False, seed = 12038):
-    np.random.seed(seed)
+def Sm(X, y, f_m, sample_size, replace = False, rng = None):
     # f_m = f_0
 
     n,p = X.shape
-    test_idx  = np.random.choice(range(n), size = sample_size, replace = replace)
+    test_idx  = rng.choice(range(n), size = sample_size, replace = replace)
+    # print("test_idx: ", test_idx)
+
     return X[test_idx,:], y[test_idx], f_m[test_idx]
 
 def make_isle_ensemble(X_train, y_train, model, eta, nu,
@@ -38,10 +39,10 @@ def make_isle_ensemble(X_train, y_train, model, eta, nu,
         model.set_params(random_state = rng)
         # random sample the data, including the memory function
         # O(nT^4)
-        X_sm, y_sm, f_sm = Sm(X_train, y_train, f_m, train_sample_size, replace=False)
+        X_sm, y_sm, f_sm = Sm(X_train, y_train, f_m, train_sample_size, replace=False, rng=rng)
         # fit the model. O(p n log(n)), 
         # where p is considered number of features.
-        # p <= T^4 -> O(p n log(n)) <= O(nT^4 log(n))
+        # p <= T^4 -> O(p n log(n)) <= O(T^4 n log(n))
         model.fit(X_sm + f_sm.reshape(-1,1), y_sm )
         
         # update memory function
@@ -199,15 +200,17 @@ def get_new_path(estimators, path,p):
 
         # tmp_ensemble_w = coeffs[coeffs_logic]
         tmp_ensemble = estimators[coeffs_logic]
-        tmp_ensemble_fi = np.zeros(( p, len(tmp_ensemble)))
 
-        for i,m in enumerate(tmp_ensemble):
+        I_k = set()
+        for m in tmp_ensemble:
             # tmp_ensemble_fi[:,i] = m.feature_importances_*tmp_ensemble_w[i]
-            tmp_ensemble_fi[:,i] = m.feature_importances_
+            I_k_m = set(m.tree_.feature[m.tree_.feature != -2])
+            I_k |= I_k_m
 
+        I_k = list(I_k)
         # inf norm avoids numerical instabilities associated
         # with the sum of the feature importances or mean
-        new_path[:,j] = np.linalg.norm(tmp_ensemble_fi, axis = 1, ord = np.inf)
+        new_path[I_k,j] = 1
 
     return new_path
 
