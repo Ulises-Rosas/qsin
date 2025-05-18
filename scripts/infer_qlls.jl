@@ -12,6 +12,7 @@ ftolRel = 1e-6
 ftolAbs = 1e-6
 xtolAbs = 1e-3
 xtolRel = 1e-2
+up_to_constant = true
 
 # ftolRel = 1e-1
 # ftolAbs = 1e-1
@@ -40,6 +41,8 @@ function help_func()
         --ftolAbs: float; absolute tolerance for the objective function (default: $ftolAbs)
         --xtolRel: float; relative tolerance for parameter changes (default: $xtolRel)
         --xtolAbs: float; absolute tolerance for parameter changes  (default: $xtolAbs)
+        --no_up_to_constant: do not use the up to constant option. Not up to constant
+                   use raw qll pseudolikelihood to estimate overall pseudolikelihood
         --ncores: int; number of cores (default: $ncores)        
         --seed: int; seed for random number generator (default: $seed)
         --help: display this help message
@@ -73,6 +76,9 @@ for i in eachindex(ARGS)
 
         elseif ARGS[i] == "--outfile"
             global outfile = ARGS[i+1];
+
+        elseif ARGS[i] == "--no_up_to_constant"
+            global up_to_constant = false;
 
         elseif ARGS[i] == "--ftolRel"
             global ftolRel = parse(Float64, ARGS[i+1]);
@@ -115,16 +121,6 @@ addprocs(ncores)
 @suppress @everywhere using DataFrames;
 @everywhere using PhyloNetworks;
 
-@everywhere function QuartetCounts(ngenes, df_long)
-    """
-    ngenes: number of genes
-    df_long: dataframe after using fittedQuartetCF with :long
-    df_long[:,6] is the observed probability of the quartet
-    """
-    return repeat(ngenes, inner = 3) .* df_long[:,6]
-end
-
-
 function get_uniq_names(all_buckyCF)
     # get all the species names
     spps_names = Set{String}()
@@ -156,13 +152,26 @@ function  make_colnames(dat)
     return ordered_spps
 end
 
-function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtolRel, xtolAbs; seed = 12038)
+@everywhere function q_pseudo(qt; up_to_constant = true)
+    if up_to_constant
+        return qt.logPseudoLik
+    end
+
+    counts = qt.obsCF*qt.ngenes
+    # add to the results table
+    return sum(counts .* log.(qt.qnet.expCF))
+end
+
+
+function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant,
+    ftolRel, ftolAbs, xtolRel, xtolAbs; seed = 12038)
     
     Random.seed!(seed)
     # buckyCFfile = "./test_data/1_seqgen.CFs.csv"
     # netfile = "./test_data/n6/n6_sim1.txt"
 
-    @everywhere function process_network(netfile, all_buckyCF, permuted_names, ftolRel, ftolAbs, xtolRel, xtolAbs)
+    @everywhere function process_network(netfile, all_buckyCF, permuted_names, up_to_constant,
+        ftolRel, ftolAbs, xtolRel, xtolAbs)
         # O(1)
 
         netstart = readTopology(netfile) # O(n)
@@ -186,10 +195,7 @@ function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtol
             # println(new_net)
             qlls = Dict{Tuple,Float64}()
             for qt in all_buckyCF.quartet
-                # n genes
-                counts = qt.obsCF*qt.ngenes
-                # add to the results table
-                qlls[Tuple(qt.taxon)] = sum(counts .* log.(qt.qnet.expCF))
+                qlls[Tuple(qt.taxon)] = q_pseudo(qt; up_to_constant = up_to_constant)
             end
             # println(qlls)
             return qlls
@@ -212,11 +218,11 @@ function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtol
         permuted_names = permuted_names[randperm(length(permuted_names))]
         # println("permuted names: ", permuted_names)
 
-        process_network(netfile, all_buckyCF_tmp, permuted_names, ftolRel, ftolAbs, xtolRel, xtolAbs)
+        process_network(netfile, all_buckyCF_tmp, permuted_names, up_to_constant,
+         ftolRel, ftolAbs, xtolRel, xtolAbs)
     end
 
     Xy = []
-
     # add column names, including the `sum`
     push!(Xy, make_colnames(dat))
 
@@ -244,4 +250,5 @@ function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtol
     writedlm(outputfile, Xy, ',')
 end
 
-@time evaluate_sims(nets, CFfile, outfile, ftolRel, ftolAbs, xtolRel, xtolAbs; seed = seed)
+@time evaluate_sims(nets, CFfile, outfile, up_to_constant, 
+ftolRel, ftolAbs, xtolRel, xtolAbs; seed = seed)
