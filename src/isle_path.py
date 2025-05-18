@@ -32,19 +32,25 @@ def make_isle_ensemble(X_train, y_train, model, eta, nu,
 
     F_train = np.zeros((n_train,M))
     estimators = deque()
+    # O(MnT^4log(n))
     for i in progressbar(range(M), "Computing trees: ", 40):
 
         model.set_params(random_state = rng)
         # random sample the data, including the memory function
+        # O(nT^4)
         X_sm, y_sm, f_sm = Sm(X_train, y_train, f_m, train_sample_size, replace=False)
         # fit the model. O(p n log(n)), 
-        # where p is considered number of features
+        # where p is considered number of features.
+        # p <= T^4 -> O(p n log(n)) <= O(nT^4 log(n))
         model.fit(X_sm + f_sm.reshape(-1,1), y_sm )
         
         # update memory function
         f_m = f_m + nu*model.predict(X_train)
         
         F_train[:,i] = model.predict(X_train)  # O(n)
+        # model largest object is the tree
+        # and this has a size of O(d) = O(1) for
+        # small d
         estimators.append(deepcopy(model)) # O(1)
 
     return F_train, list(estimators) # O(M)
