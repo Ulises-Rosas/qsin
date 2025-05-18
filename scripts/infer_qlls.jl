@@ -13,6 +13,12 @@ ftolAbs = 1e-6
 xtolAbs = 1e-3
 xtolRel = 1e-2
 
+# ftolRel = 1e-1
+# ftolAbs = 1e-1
+# xtolAbs = 1e-1
+# xtolRel = 1e-1
+seed = 12038
+
 function help_func()
     # make a help message
     help_message = """
@@ -79,6 +85,9 @@ for i in eachindex(ARGS)
         elseif ARGS[i] == "--xtolAbs"
             global xtolAbs = parse(Float64, ARGS[i+1]);
 
+        elseif ARGS[i] == "--seed"
+            global seed = parse(Int, ARGS[i+1]);
+
         elseif ARGS[i] == "--help" || ARGS[i] == "-h"
             help_func();
         end
@@ -96,9 +105,11 @@ end
 # println("ncores: ", ncores);
 
 using Suppressor;
+using DelimitedFiles
 
 addprocs(ncores)
 
+@everywhere using Random;
 @everywhere using CSV;
 @suppress @everywhere using DataFrames;
 @everywhere using PhyloNetworks;
@@ -133,61 +144,39 @@ end
     return sum( QC .* log.( df_long[:,7] ) )
 end
 
-@everywhere function spps_code(df)
-    # make rows to collapse in a string in a
-    code_spps = []
-    quartets = unique(df)
-    for i in 1:size(quartets,1)
-        # collapse all columns in a string
-        tmp_code = join(quartets[i,:], ".")
-        push!(code_spps, tmp_code)
+
+
+function get_uniq_names(all_buckyCF)
+    # get all the species names
+    spps_names = Set{String}()
+    for q in all_buckyCF.quartet
+        for taxon in q.taxon
+            push!(spps_names, taxon)
+        end
     end
-    
-    return code_spps
+    # convert spps_names to a vector
+    spps_names = collect(spps_names)
+    return spps_names
 end
 
-
-
-@everywhere function QLL(ngenes, df_long)
-    """
-    quartet log-likelihood
-
-    ngenes: number of genes
-    df_long: dataframe after using fittedQuartetCF with :long
-    """
-    QC = QuartetCounts(ngenes, df_long)
-    all_qlls = QC .* log.( df_long[:,7] )
-    
-    # loop that takes 3 rows at a time of all_qlls
-    qlls = []
-    for i in 1:3:size(all_qlls,1)
-        push!(qlls, sum(all_qlls[i:i+2]))
+@everywhere function  set_spps_names(netstart, spps_names)
+    for (i,l) in enumerate(netstart.leaf)
+        l.name = spps_names[i]
     end
-    
-    return qlls
-end
-
-@everywhere function iter_df(ngenes, df_long)
-    
-    qll = QLL(ngenes, df_long)
-    spps = spps_code(df_long[:, 1:4])
-
-    push!(qll, sum(qll))
-    push!(spps, "sum")
-
-    return DataFrame(qll', spps)
 end
 
 
-function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtolRel, xtolAbs)
+function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtolRel, xtolAbs; seed = 12038)
+    
+    Random.seed!(seed)
+    # buckyCFfile = "/Users/ulisesrosas/Desktop/experiments_qsin/cui-data_qsin/cui_etal_data.msbum.CFs.csv"
+    # netfile = "/Users/ulisesrosas/Desktop/experiments_qsin/cui-data_qsin/sims/xipho_sim2701.txt"
 
-    # buckyCFfile = "./test_data/1_seqgen.CFs_n15.csv"
-    # netfile = "./test_data/n15_sim_netv2/n15_sim_netv2_sim2796.txt"
-
-    @everywhere function process_network(netfile, all_buckyCF, dat, ftolRel, ftolAbs, xtolRel, xtolAbs)
+    @everywhere function process_network(netfile, all_buckyCF, spps_names, ftolRel, ftolAbs, xtolRel, xtolAbs)
         # O(1)
 
         netstart = readTopology(netfile) # O(n)
+        set_spps_names(netstart, spps_names)
 
         try
             # branch lengths from simulation are clock time-based
@@ -205,29 +194,67 @@ function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtol
                                     xtolRel = xtolRel, 
                                     xtolAbs = xtolAbs)
             # println(new_net)
-            
-            # we transform all_buckyCF into a proper format
-            df_long = fittedQuartetCF(all_buckyCF, :long)
-            result = iter_df(dat.ngenes, df_long)
-            return result
+            qlls = Dict()
+            for qt in all_buckyCF.quartet
+                # n genes
+                counts = qt.obsCF*qt.ngenes
+                # add to the results table
+                qlls[qt.taxon] = sum(counts .* log.(qt.qnet.expCF))
+            end
+            return qlls
+
         catch e
             println("Error in ", netfile, ": ", e)
-            return DataFrame()
+            return nothing
         end
     end
 
     all_buckyCF = readTableCF(buckyCFfile)
+    # get all the species names
+    permuted_names = get_uniq_names(all_buckyCF) # unordered   
     dat = DataFrame(CSV.File(buckyCFfile); copycols=false)
 
-    main_df = @distributed (vcat) for netfile in networks
+    results = @distributed (vcat) for netfile in networks
         println(netfile)
 
-        dat_tmp = deepcopy(dat)
         all_buckyCF_tmp = deepcopy(all_buckyCF)
-        process_network(netfile, all_buckyCF_tmp, dat_tmp, ftolRel, ftolAbs, xtolRel, xtolAbs)
-    end
-    CSV.write(outputfile, main_df)
+        permuted_names = permuted_names[randperm(length(permuted_names))]
 
+        process_network(netfile, all_buckyCF_tmp, permuted_names, ftolRel, ftolAbs, xtolRel, xtolAbs)
+    end
+
+    Xy = []
+    # names in the same order as data CF table
+    ordered_spps = []
+    for row in eachrow(dat) # O(T^4)
+        quartet = Array(row[1:4])
+        joined = join(quartet, "'.'")
+        push!(ordered_spps, "'" * joined * "'")
+    end
+    push!(ordered_spps, "sum")
+    # add column names, including the `sum`
+    push!(Xy, ordered_spps)
+
+    # O(n*T^4)
+    for qlls_dict in results
+        if qlls === nothing
+            continue
+        end
+
+        # creates a vector with the same order as the data CF table
+        xy_i = []
+        for row in eachrow(dat) # O(T^4)
+            # get the quartet from dat
+            quartet = Array(row[1:4])
+            # call from dictionary
+            push!(xy_i, qlls_dict[quartet])
+        end
+        push!(xy_i, sum(xy_i))
+
+        push!(Xy, xy_i)
+    end
+
+    writedlm(outputfile, Xy, ',')
 end
 
-@time evaluate_sims(nets, CFfile, outfile, ftolRel, ftolAbs, xtolRel, xtolAbs)
+@time evaluate_sims(nets, CFfile, outfile, ftolRel, ftolAbs, xtolRel, xtolAbs; seed = seed)
