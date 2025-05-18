@@ -41,6 +41,7 @@ function help_func()
         --xtolRel: float; relative tolerance for parameter changes (default: $xtolRel)
         --xtolAbs: float; absolute tolerance for parameter changes  (default: $xtolAbs)
         --ncores: int; number of cores (default: $ncores)        
+        --seed: int; seed for random number generator (default: $seed)
         --help: display this help message
 """;
     println(help_message);
@@ -123,28 +124,6 @@ addprocs(ncores)
     return repeat(ngenes, inner = 3) .* df_long[:,6]
 end
 
-@everywhere function std_loglik(ngenes, df_long)
-    """
-    standard log-likelihood
-
-    ngenes: number of genes
-    df_long: dataframe after using fittedQuartetCF with :long
-    df_long[:,7] is the expected probability of the quartet
-
-    From the documentation:
-    "if long, the output has one row per quartet,
-    i.e. 3 rows per 4-taxon sets, and *7 columns*:
-    4 columns for the taxon names, one column to give 
-    the quartet resolution, one column for the 
-    observed CF and the *last column for 
-    the expected CF."
-
-    """
-    QC = QuartetCounts(ngenes, df_long)
-    return sum( QC .* log.( df_long[:,7] ) )
-end
-
-
 
 function get_uniq_names(all_buckyCF)
     # get all the species names
@@ -165,18 +144,29 @@ end
     end
 end
 
+function  make_colnames(dat)
+    ordered_spps = []
+    for row in eachrow(dat) # O(T^4)
+        quartet = Array(row[1:4])
+        joined = join(quartet, "'.'")
+        push!(ordered_spps, "'" * joined * "'")
+    end
+    push!(ordered_spps, "sum")
+
+    return ordered_spps
+end
 
 function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtolRel, xtolAbs; seed = 12038)
     
     Random.seed!(seed)
-    # buckyCFfile = "/Users/ulisesrosas/Desktop/experiments_qsin/cui-data_qsin/cui_etal_data.msbum.CFs.csv"
-    # netfile = "/Users/ulisesrosas/Desktop/experiments_qsin/cui-data_qsin/sims/xipho_sim2701.txt"
+    # buckyCFfile = "./test_data/1_seqgen.CFs.csv"
+    # netfile = "./test_data/n6/n6_sim1.txt"
 
-    @everywhere function process_network(netfile, all_buckyCF, spps_names, ftolRel, ftolAbs, xtolRel, xtolAbs)
+    @everywhere function process_network(netfile, all_buckyCF, permuted_names, ftolRel, ftolAbs, xtolRel, xtolAbs)
         # O(1)
 
         netstart = readTopology(netfile) # O(n)
-        set_spps_names(netstart, spps_names)
+        set_spps_names(netstart, permuted_names)
 
         try
             # branch lengths from simulation are clock time-based
@@ -194,13 +184,14 @@ function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtol
                                     xtolRel = xtolRel, 
                                     xtolAbs = xtolAbs)
             # println(new_net)
-            qlls = Dict()
+            qlls = Dict{Tuple,Float64}()
             for qt in all_buckyCF.quartet
                 # n genes
                 counts = qt.obsCF*qt.ngenes
                 # add to the results table
-                qlls[qt.taxon] = sum(counts .* log.(qt.qnet.expCF))
+                qlls[Tuple(qt.taxon)] = sum(counts .* log.(qt.qnet.expCF))
             end
+            # println(qlls)
             return qlls
 
         catch e
@@ -219,25 +210,20 @@ function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtol
 
         all_buckyCF_tmp = deepcopy(all_buckyCF)
         permuted_names = permuted_names[randperm(length(permuted_names))]
+        # println("permuted names: ", permuted_names)
 
         process_network(netfile, all_buckyCF_tmp, permuted_names, ftolRel, ftolAbs, xtolRel, xtolAbs)
     end
 
     Xy = []
-    # names in the same order as data CF table
-    ordered_spps = []
-    for row in eachrow(dat) # O(T^4)
-        quartet = Array(row[1:4])
-        joined = join(quartet, "'.'")
-        push!(ordered_spps, "'" * joined * "'")
-    end
-    push!(ordered_spps, "sum")
+
     # add column names, including the `sum`
-    push!(Xy, ordered_spps)
+    push!(Xy, make_colnames(dat))
 
     # O(n*T^4)
     for qlls_dict in results
-        if qlls === nothing
+
+        if qlls_dict === nothing
             continue
         end
 
@@ -245,7 +231,8 @@ function evaluate_sims(networks, buckyCFfile, outputfile, ftolRel, ftolAbs, xtol
         xy_i = []
         for row in eachrow(dat) # O(T^4)
             # get the quartet from dat
-            quartet = Array(row[1:4])
+            quartet = string.(Tuple(row[1:4])) 
+
             # call from dictionary
             push!(xy_i, qlls_dict[quartet])
         end
