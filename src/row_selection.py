@@ -122,7 +122,9 @@ def row_selection(path, CT_spps, test_errors, n_spps = 15,
         # that there are repeated j's
         if j_int in taken:
             continue
-
+        
+        # in any of the paths: elastic net or ISLE
+        # the first column is all zeros
         if j_int == 0:
             taken.add(j_int)
             continue
@@ -132,13 +134,13 @@ def row_selection(path, CT_spps, test_errors, n_spps = 15,
         if check_spps:
             # check on the number of species
             if len(np.unique(CT_spps[beta_j_nz,:])) < n_spps:
-                taken.append(j_int)
+                taken.add(j_int)
                 continue
 
         # plus one as Julia starts from 1
         # O(\rho T^4) for isle
         new_batches.append(  add_offset(beta_j_nz) )
-        taken.append(j_int)
+        taken.add(j_int)
     
     return list(new_batches)
 
