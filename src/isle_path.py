@@ -210,6 +210,9 @@ def get_new_path(estimators, path):
         # first iteration of the path
         # all the coefficients are 0: no selection
         if j == 0:
+            # we add an empty set for backward compatibility
+            # with the elastic net path
+            new_path.append([])
             continue
 
         # j = 2
