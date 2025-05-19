@@ -2,7 +2,7 @@
 
 import time
 import argparse
-
+from collections import deque
 
 import numpy as np
 # from qsin.sparse_solutions import ElasticNet, lasso_path
@@ -64,71 +64,101 @@ def agglomerate_batches(batches, window = 2):
 
 
 def choose_j(path, test_errors = None, factor = 1/2):
-    # factor = -1
-    # test_errors = 1
+    """
+    Choose the best j based on the path and test errors
+    Parameters
+    ----------
+    path : numpy.ndarray
+        The path of coefficients with shape (p,k)
+        where p is the number of features and k is the number of lambda values
+    test_errors : numpy.ndarray, optional
+        The test errors with shape (k,2)
+        where the first column is the lambda values and the second column is the RMSE values
+    factor : float, optional
+        The factor to choose the best j
+        if factor is -1, then the function will return the index of the minimum test error
+        if factor is between 0 and 1, then the function will return the index of the best j
+        based on the number of non-zero coefficients
+        The default is 1/2.
+
+    Returns
+    -------
+    int
+        The index of the best j
+    
+    """
+
+    # path has (p,k) shape, where p is the number of features
+    # and k is the number of lambda values
     if factor == -1 and test_errors is not None:
         # tests_errors contains two columns
         # the first one is the lambda values
         # the second one is the RMSE values
         # check 'calculate_test_errors' function
-        return np.argmin(test_errors[:,1])
+        
+        # O(np) for obtain test_errors
+        return np.argmin(test_errors[:,1]) # O(k) = O(1) for fixed k
     
     else:
         if factor < 0 or factor > 1:
             raise ValueError('Factor must be between 0 and 1 if nwerror is false and factor is not -1.')
 
-        k = np.round(path.shape[0]*factor)
-        non_zeros_len = []
-        for j in range(path.shape[1]):
-            beta_j = path[:,j]
-            non_zeros_len.append( np.sum(beta_j != 0) )
+        # recall p is the number of features
+        p,k = path.shape
+        user_selection = np.round(p*factor).astype(int)
 
-        return np.argmin( np.abs(non_zeros_len - k ))
+        best_dist = np.inf
+        best_j = 0
+        for j in range(k):
+            # beta_j is the j-th column of path
+            # which is obtained from the j-th lambda value
+            beta_j = path[:,j]
+            # selection by elastic net
+            model_selection = np.sum(beta_j != 0)
+            # distance between of desired number of non-zero
+            # coefficients and the current number of non-zero
+            tmp_dist = np.abs(model_selection - user_selection)
+            if tmp_dist < best_dist:
+                best_dist = tmp_dist
+                best_j = j
+
+        return best_j
 
 
 def select_path(path, CT_spps, test_errors, n_spps = 15, factor = 1/2, inbetween = 0):
 
-    # k = np.round(path.shape[0]*factor)
-
-    # non_zeros = []
-    # for j in range(path.shape[1]):
-    #     beta_j = path[:,j]
-    #     non_zeros.append( np.sum(beta_j != 0) )
-    
-    # inbetween =  10
-    # j_opt = np.argmin( np.abs(non_zeros - k ))
-
+    # path has (p,k) shape, where p is the number of features
+    # p = T^4
     j_opt = choose_j(path, test_errors, factor = factor)
+    chosen_j = np.linspace(0, j_opt, 2 + inbetween,
+                            endpoint=True, dtype=int) 
 
-    chosen_j = np.linspace(0, j_opt, 2 + inbetween, endpoint=True )
-    chosen_j = chosen_j[chosen_j != 0]
-
-
-    taken = []
-    new_batches = []
-    for j in chosen_j:
-        # make sure it is the integer
-        j_int = np.int64(np.round(j))
-
+    taken = set()
+    new_batches = deque()
+    for j_int in chosen_j:
 
         # once it is integer,
         # it might be the case
         # that there are repeated j's
         if j_int in taken:
             continue
+
+        if j_int == 0:
+            taken.add(j_int)
+            continue
         
-    
-        beta_j_nz = np.where(path[:,j_int] != 0)[0]
+        beta_j_nz = np.where(path[:,j_int] != 0)[0] # O(T^4)
 
         # check on the number of species
         if len(np.unique(CT_spps[beta_j_nz,:])) < n_spps:
             taken.append(j_int)
             continue
 
-        new_batches.append(  beta_j_nz + 1)
+        # plus one as Julia starts from 1
+        new_batches.append(  beta_j_nz + 1 )
         taken.append(j_int)
     
-    return new_batches
+    return list(new_batches)
 
 def re_center_for_isle(T_test, T_train):
     """
@@ -245,7 +275,7 @@ def main():
     assert args.nu >= 0 and args.nu <= 1, "Learning rate must be between 0 and 1."
     assert args.prefix != "", "Prefix must not be empty."
 
-
+    # O(nT^4) for reading only
     data = np.loadtxt(args.Xy_file, delimiter=',', skiprows=1)
     X, y = data[:, :-1], data[:, -1]
     n,p = X.shape
@@ -253,7 +283,7 @@ def main():
 
     num_test = int(n*args.p_test)
     start = time.time()
-
+    # O(nT^4) for centering or O(M T^4 nlog(n)) for ISLE
     (X_train,X_test,
      y_train,y_test,
      estimators # None if isle is False
@@ -300,7 +330,9 @@ def main():
     else:
         assert not args.cv, "If alpha is a single value, then cv must be False."
         args.alpha = args.alpha[0]
-            
+
+    # O(npk) = O(nT^4) for fixed k 
+    # or O(nM) if isle is True
     model = ElasticNet(fit_intercept=True, 
                         max_iter=args.max_iter,
                         init_iter=1, 
@@ -308,7 +340,8 @@ def main():
                         alpha=args.alpha, 
                         tol=args.tol, seed = args.seed)
 
-
+    # O(npk) = O(nT^4) for fixed k
+    # or O(Mk) if isle is True
     path = lasso_path(X_train, y_train, params, model)
     end_lasso = time.time() - start
 
@@ -322,45 +355,48 @@ def main():
                    lam_path, 
                    delimiter=',',
                    comments='')
-
+    # O(n)
     test_errors = calculate_test_errors(args, path, params, X_test, y_test)
 
-
+    #O(T^4)
     CT = np.loadtxt(args.CT_file, delimiter=',', skiprows=1)
     CT_spps = CT[:, :4]
     n_spps = len(np.unique(CT_spps))
 
     if args.isle:
         picked_file = args.prefix + "_overlappedBatches_isle.txt"
-        batch_file = args.prefix + "_disjointBatches_isle.txt"
+        # batch_file = args.prefix + "_disjointBatches_isle.txt"
+        
         # transform the path
-        path = get_new_path(estimators, path, p)
+        # O(kp) = O(kT^4) = O(T^4) for fixed k
+        path = get_new_path(estimators, path, p) 
         
     else:
         picked_file = args.prefix + "_overlappedBatches.txt"
-        batch_file = args.prefix + "_disjointBatches.txt"
+        # batch_file = args.prefix + "_disjointBatches.txt"
 
 
     # overlapping batches
+    # O(T^4)
     picked_batches = select_path(path, CT_spps, test_errors, n_spps, args.factor, args.inbetween)
+    # O(\rho T^4) where \rho is the fraction of non-zero coefficients
     write_batches(picked_file, picked_batches)
 
-    # disjoint batches creation
-    batches = make_batches(path, CT_spps, n_spps)
+    # disjoint batches creation, old idea
+    # that it is not prioritized right now
+    # batches = make_batches(path, CT_spps, n_spps)
 
-    if args.window <= 1:
-        write_batches(batch_file, batches)
+    # if args.window <= 1:
+    #     write_batches(batch_file, batches)
 
-    else:
-        new_batches = agglomerate_batches(batches, window=args.window)
-        write_batches(batch_file, new_batches)
+    # else:
+    #     new_batches = agglomerate_batches(batches, window=args.window)
+    #     write_batches(batch_file, new_batches)
 
 
     if not args.nwerror and args.verbose:
         # print(test_errors)
-        j_min = np.argmin(test_errors[:,1])
-        new_path_j = path[:,j_min]
-        min_err_sel = np.sum(new_path_j != 0)
+        min_err_sel = len(picked_batches[-1]) # the best is the last one
         print("Number of rows selected at min error: ", min_err_sel)
 
 if __name__ == "__main__":
