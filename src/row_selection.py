@@ -104,10 +104,20 @@ def add_offset(beta_j_nz):
     else:
         return [i + 1 for i in beta_j_nz]
 
-def row_selection(path, CT_spps, test_errors, n_spps = 15, 
+def read_CT(CT_file):
+    CT = np.loadtxt(CT_file, delimiter=',', skiprows=1)
+    CT_spps = CT[:, :4]
+    n_spps = len(np.unique(CT_spps))
+    return CT_spps, n_spps
+
+def row_selection(path, test_errors, 
                 factor = 1/2, inbetween = 0, 
-                check_spps = False):
+                check_spps = False, CT_file = None):
     
+    if check_spps:
+        CT_spps, n_spps = read_CT(CT_file) # O(T^4)
+        
+
     # path has (p,k) shape, where p is the number of features
     j_opt = choose_j(path, test_errors, factor = factor)
     chosen_j = np.linspace(0, j_opt, 2 + inbetween,

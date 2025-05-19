@@ -166,7 +166,7 @@ def main():
 
     assert all([a > 0 and a <= 1 for a in args.alpha]), "Alpha values must be between 0 and 1."
     if len(args.alpha) > 1:
-        assert args.cv, "If alpha is a list, then cv must be True."
+        assert args.cv, "If alpha is a list, then --cv should be used."
 
         # do cross-validation
         args.alpha = ElasticNetCV_alpha(args, X_train, y_train,
@@ -182,7 +182,7 @@ def main():
         params = {'lam': np.logspace(np.log10(min_lam), np.log10(max_lam), args.K, endpoint=True)[::-1]}
 
     else:
-        assert not args.cv, "If alpha is a single value, then cv must be False."
+        assert not args.cv, "If alpha is a single value, then --cv should not be used."
         args.alpha = args.alpha[0]
 
     # O(npk) = O(nT^4) for fixed k 
@@ -212,11 +212,6 @@ def main():
     # O(n)
     test_errors = calculate_test_errors(args, path, params, X_test, y_test)
 
-    #O(T^4)
-    CT = np.loadtxt(args.CT_file, delimiter=',', skiprows=1)
-    CT_spps = CT[:, :4]
-    n_spps = len(np.unique(CT_spps))
-
     if args.isle:
         picked_file = args.prefix + "_overlappedBatches_isle.txt"
         # batch_file = args.prefix + "_disjointBatches_isle.txt"
@@ -232,9 +227,10 @@ def main():
 
 
     # overlapping batches
-    # O(\rho T^4) for isle
-    rows_selected = row_selection(path, CT_spps, test_errors, n_spps, 
-                                   args.factor, args.inbetween, args.check_spps) 
+    # O(\rho T^4) for isle. If check_spps is True, it is O(T^4)
+    rows_selected = row_selection(path, test_errors,
+                                  args.factor, args.inbetween, args.check_spps,
+                                  args.CT_file) 
     
     # O(\rho T^4) where \rho is the fraction of non-zero coefficients
     write_rows(picked_file, rows_selected)
