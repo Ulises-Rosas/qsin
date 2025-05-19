@@ -67,7 +67,6 @@ def main():
 
     opt_args = parser.add_argument_group("Optional arguments")
     opt_args.add_argument("-h","--help", action="help", help="Show this help message and exit.")
-    opt_args.add_argument("--version", action="version", version="%(prog)s 1.0")
     opt_args.add_argument("--verbose", action="store_true", help="Whether to print verbose output.")
     opt_args.add_argument("--isle", action="store_true", help="Whether to use path from decision tree-based ISLE (i.e., ensemble learning).")
     opt_args.add_argument("--p_test", type=float, default=0.35, metavar="", help="Proportion of observations to use for testing.")
