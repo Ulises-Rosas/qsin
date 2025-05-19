@@ -80,7 +80,7 @@ def main():
     isle_args.add_argument("--M", type=int, default=500, metavar="", help="Number of trees in the ensemble.")
     isle_args.add_argument("--max_depth", type=int, default=5, metavar="", help="Maximum depth of the decision tree.")
     isle_args.add_argument("--max_leaf_nodes", type=int, default=6, metavar="", help="Maximum number of leaf nodes in the decision tree.")
-    isle_args.add_argument("--max_features", type=max_features_type, default=0.5, metavar="", help="Maximum proportion of features it is considered to grow nodes in a regression tree. It can also be 'sqrt' or 'log2'.")
+    isle_args.add_argument("--max_features", type=max_features_type, default=0.3, metavar="", help="Maximum proportion of features it is considered to grow nodes in a regression tree. It can also be 'sqrt' or 'log2'.")
     isle_args.add_argument("--param_file", type=str, default=None, metavar="", help="""JSON file with parameters for the decision tree
                            different from max_depth and mx_p. The decision trees are made using
                            sklearn's DecisionTreeRegressor. Then a complete list of parameters can be found
