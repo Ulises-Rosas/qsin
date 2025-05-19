@@ -176,7 +176,7 @@ def split_data_isle(X, y, num_test, seed,
     return X_train, X_test, y_train, y_test, estimators
     
 
-def get_new_path(estimators, path,p):
+def get_new_path(estimators, path):
     """
     this path is based on the feature importances that
     the selected estimators have. For each lambda, there 
@@ -184,33 +184,47 @@ def get_new_path(estimators, path,p):
     the average feature importances of the ensemble
 
     The new path is a p x K matrix instead of M x K
+
+    Parameters
+    ----------
+    estimators : list
+        List of decision tree regressors.
+    path : numpy.ndarray
+        The path of coefficients with shape (M,k)
+        where M is the number of estimators and k is the number of lambda values
+
+    Returns
+    -------
+    list
+        The new path, which is a list of lists of feature indices.
+        Each set corresponds to a lambda value.
+        The length of the list is equal to the number of lambda values.
+        Each set contains the indices of the features selected by the ensemble
+        of estimators for that lambda value.
     """
 
     estimators = np.array(estimators)
-    new_path = np.zeros((p, path.shape[1]))
+    new_path = deque()
 
     for j in range(path.shape[1]):
-
+        # first iteration of the path
+        # all the coefficients are 0: no selection
         if j == 0:
-            new_path[:,j] = np.repeat(0, p)
             continue
+
         # j = 2
         coeffs = path[:,j]
         coeffs_logic = coeffs != 0
 
-        # tmp_ensemble_w = coeffs[coeffs_logic]
         tmp_ensemble = estimators[coeffs_logic]
 
         I_k = set()
         for m in tmp_ensemble:
-            # tmp_ensemble_fi[:,i] = m.feature_importances_*tmp_ensemble_w[i]
             I_k_m = set(m.tree_.feature[m.tree_.feature != -2])
             I_k |= I_k_m
 
         I_k = list(I_k)
-        # inf norm avoids numerical instabilities associated
-        # with the sum of the feature importances or mean
-        new_path[I_k,j] = 1
+        new_path.append(I_k)
 
-    return new_path
+    return list(new_path)
 

@@ -2,7 +2,7 @@
 
 import time
 import argparse
-from collections import deque
+
 
 import numpy as np
 # from qsin.sparse_solutions import ElasticNet, lasso_path
@@ -10,155 +10,8 @@ from qsin.sparse_solutions_hd import ElasticNet, lasso_path
 from qsin.utils import  calculate_test_errors, max_lambda
 from qsin.isle_path import split_data_isle, get_new_path
 from qsin.ElasticNetCV import ElasticNetCV_alpha
+from qsin.row_selection import row_selection, write_rows
 
-def write_batches(outfile, batches):
-
-    with open(outfile, 'w') as f:
-        for batch in batches:
-            f.write(",".join([str(b) for b in batch]) + "\n")
-
-def make_batches(path, CT_spps, n_spps = 15):
-    batches = []
-    picked_idx = []
-    for k in range(path.shape[1]):
-
-        beta_k = path[:,k]
-        idx_k = np.where(beta_k != 0)[0]
-
-        if len(idx_k) == 0:
-            continue
-
-        if len(batches) == 0:
-            batches.append(idx_k)
-            picked_idx.extend(idx_k)
-            continue
-
-
-        tilde_idx_k = np.array(list(set(idx_k) - set(picked_idx)))
-        if len(tilde_idx_k) == 0:
-            continue
-
-        idx_k_1 = batches[-1]
-        spps_k_1 = len(np.unique(CT_spps[idx_k_1,:]))
-
-        # tilde_spps_k = len(np.unique(CT_spps[tilde_idx_k,:]))
-        
-        if spps_k_1 < n_spps:
-            batches[-1] = np.concatenate((batches[-1], tilde_idx_k))
-            picked_idx.extend(tilde_idx_k)
-
-        else:
-            batches.append(tilde_idx_k)
-            picked_idx.extend(tilde_idx_k)
-
-    return [b+1 for b in batches]
-
-# agglomerate batches
-def agglomerate_batches(batches, window = 2):
-    new_batches = []
-    for i in range(0, len(batches), window):
-        agglomerated = [b for b in batches[i:i+window] if len(b) > 0]
-        agglomerated = np.concatenate(agglomerated)
-        new_batches.append(agglomerated)
-    return new_batches
-
-
-def choose_j(path, test_errors = None, factor = 1/2):
-    """
-    Choose the best j based on the path and test errors
-    Parameters
-    ----------
-    path : numpy.ndarray
-        The path of coefficients with shape (p,k)
-        where p is the number of features and k is the number of lambda values
-    test_errors : numpy.ndarray, optional
-        The test errors with shape (k,2)
-        where the first column is the lambda values and the second column is the RMSE values
-    factor : float, optional
-        The factor to choose the best j
-        if factor is -1, then the function will return the index of the minimum test error
-        if factor is between 0 and 1, then the function will return the index of the best j
-        based on the number of non-zero coefficients
-        The default is 1/2.
-
-    Returns
-    -------
-    int
-        The index of the best j
-    
-    """
-
-    # path has (p,k) shape, where p is the number of features
-    # and k is the number of lambda values
-    if factor == -1 and test_errors is not None:
-        # tests_errors contains two columns
-        # the first one is the lambda values
-        # the second one is the RMSE values
-        # check 'calculate_test_errors' function
-        
-        # O(np) for obtain test_errors
-        return np.argmin(test_errors[:,1]) # O(k) = O(1) for fixed k
-    
-    else:
-        if factor < 0 or factor > 1:
-            raise ValueError('Factor must be between 0 and 1 if nwerror is false and factor is not -1.')
-
-        # recall p is the number of features
-        p,k = path.shape
-        user_selection = np.round(p*factor).astype(int)
-
-        best_dist = np.inf
-        best_j = 0
-        for j in range(k):
-            # beta_j is the j-th column of path
-            # which is obtained from the j-th lambda value
-            beta_j = path[:,j]
-            # selection by elastic net
-            model_selection = np.sum(beta_j != 0)
-            # distance between of desired number of non-zero
-            # coefficients and the current number of non-zero
-            tmp_dist = np.abs(model_selection - user_selection)
-            if tmp_dist < best_dist:
-                best_dist = tmp_dist
-                best_j = j
-
-        return best_j
-
-
-def select_path(path, CT_spps, test_errors, n_spps = 15, factor = 1/2, inbetween = 0):
-
-    # path has (p,k) shape, where p is the number of features
-    # p = T^4
-    j_opt = choose_j(path, test_errors, factor = factor)
-    chosen_j = np.linspace(0, j_opt, 2 + inbetween,
-                            endpoint=True, dtype=int) 
-
-    taken = set()
-    new_batches = deque()
-    for j_int in chosen_j:
-
-        # once it is integer,
-        # it might be the case
-        # that there are repeated j's
-        if j_int in taken:
-            continue
-
-        if j_int == 0:
-            taken.add(j_int)
-            continue
-        
-        beta_j_nz = np.where(path[:,j_int] != 0)[0] # O(T^4)
-
-        # check on the number of species
-        if len(np.unique(CT_spps[beta_j_nz,:])) < n_spps:
-            taken.append(j_int)
-            continue
-
-        # plus one as Julia starts from 1
-        new_batches.append(  beta_j_nz + 1 )
-        taken.append(j_int)
-    
-    return list(new_batches)
 
 def re_center_for_isle(T_test, T_train):
     """
@@ -192,7 +45,6 @@ def re_center_for_isle(T_test, T_train):
 
     return (T_test - u)/sd, (T_train - u)/sd
 
-
 def max_features_type(value):
     try:
         return float(value) if value not in ['sqrt', 'log2'] else value
@@ -202,7 +54,7 @@ def max_features_type(value):
 
 def main():
 
-
+    # region: parse arguments
     parser = argparse.ArgumentParser(description="""
     Generate batches from ElasticNet path.
     """, 
@@ -254,6 +106,7 @@ def main():
     batch_args.add_argument("--factor", type=float, default=1/2, metavar="", help="Reduction factor for selecting overlapped batches. If -1 and nwerror is False, then the batch with the minimum RMSE is selected.")
     batch_args.add_argument("--inbetween", type=int, default=5, metavar="",help="Number of in-between batches for selecting overlapped batches.")
     batch_args.add_argument("--window", type=int, default=1,metavar="", help="Window size for agglomerating disjoint batches. With the current there is no agglomeration.")
+    batch_args.add_argument("--check_spps", action="store_true", help="Check the number of unique species in the batches.")
     
 
     args = parser.parse_args()
@@ -274,6 +127,7 @@ def main():
     assert args.eta > 0 and args.eta <= 1, "Proportion of observations to use in each tree must be between 0 and 1."
     assert args.nu >= 0 and args.nu <= 1, "Learning rate must be between 0 and 1."
     assert args.prefix != "", "Prefix must not be empty."
+    # endregion: parse arguments
 
     # O(nT^4) for reading only
     data = np.loadtxt(args.Xy_file, delimiter=',', skiprows=1)
@@ -369,7 +223,8 @@ def main():
         
         # transform the path
         # O(kp) = O(kT^4) = O(T^4) for fixed k
-        path = get_new_path(estimators, path, p) 
+        # it returns a list of sets
+        path = get_new_path(estimators, path) 
         
     else:
         picked_file = args.prefix + "_overlappedBatches.txt"
@@ -377,26 +232,17 @@ def main():
 
 
     # overlapping batches
-    # O(T^4)
-    picked_batches = select_path(path, CT_spps, test_errors, n_spps, args.factor, args.inbetween)
+    # O(\rho T^4) for isle
+    rows_selected = row_selection(path, CT_spps, test_errors, n_spps, 
+                                   args.factor, args.inbetween, args.check_spps) 
+    
     # O(\rho T^4) where \rho is the fraction of non-zero coefficients
-    write_batches(picked_file, picked_batches)
-
-    # disjoint batches creation, old idea
-    # that it is not prioritized right now
-    # batches = make_batches(path, CT_spps, n_spps)
-
-    # if args.window <= 1:
-    #     write_batches(batch_file, batches)
-
-    # else:
-    #     new_batches = agglomerate_batches(batches, window=args.window)
-    #     write_batches(batch_file, new_batches)
+    write_rows(picked_file, rows_selected)
 
 
     if not args.nwerror and args.verbose:
         # print(test_errors)
-        min_err_sel = len(picked_batches[-1]) # the best is the last one
+        min_err_sel = len(rows_selected[-1]) # the best is the last one
         print("Number of rows selected at min error: ", min_err_sel)
 
 if __name__ == "__main__":
