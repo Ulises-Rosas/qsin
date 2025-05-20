@@ -85,7 +85,7 @@ def make_F_test(X_test, estimators):
 
 
 def split_data_isle(X, y, num_test, seed, 
-                    isle=True, nwerror=False, 
+                    isle=True, 
                     mx_p=1/2, max_depth=5, param_file=None, max_leaves=6,
                     eta=0.5, nu=0.1, M=100,
                     verbose=True, nstdy = True):
@@ -105,8 +105,6 @@ def split_data_isle(X, y, num_test, seed,
         Random seed.
     isle : bool
         Whether to apply ISLE.
-    nwerror : bool
-        Whether to use the entire dataset for training.
     mx_p : int or str
         Maximum number of features to use in each tree.'
         This follows the sklearn convention.
@@ -143,11 +141,7 @@ def split_data_isle(X, y, num_test, seed,
     """
     rng = np.random.RandomState(seed)
 
-    if nwerror:
-        X_train, y_train = X, y
-        X_test, y_test = None, None
-    else:
-        X_train, X_test, y_train, y_test = split_data(X, y, num_test=num_test, seed=seed)
+    X_train, X_test, y_train, y_test = split_data(X, y, num_test=num_test, seed=seed)
 
     # improve stability of the algorithm
     X_train, X_test, y_train, y_test = standardize_Xy(X_train, y_train, X_test, y_test, nstdy)
@@ -158,17 +152,14 @@ def split_data_isle(X, y, num_test, seed,
         model = make_init_model(max_features = mx_p, max_depth=max_depth, max_leaves=max_leaves, param_file=param_file)
 
         start = time.time()
-        F_train, estimators = make_isle_ensemble(X_train, y_train, model, eta, nu, M, rng=rng)
+        X_train, estimators = make_isle_ensemble(X_train, y_train, model, eta, nu, M, rng=rng)
         end_isle = time.time() - start
 
         if verbose:
             print("Isle ensemble done: ", end_isle, " seconds")
 
-        X_train = F_train
+        X_test = make_F_test(X_test, estimators)
 
-        if not nwerror:
-            F_test = make_F_test(X_test, estimators)
-            X_test = F_test
 
     else:
         estimators = None

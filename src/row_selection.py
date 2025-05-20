@@ -7,6 +7,32 @@ import numpy as np
 # sel_rows = list(non_zero + 1) 
 # ",".join([str(i) for i in sel_rows])
 
+def conv_errs(test_errors, tol = 1e-4):
+
+    opt_j = np.inf
+    for j in range(1, len(test_errors)):
+        if np.abs(test_errors[j] - test_errors[j-1])/test_errors[j] < tol:
+            opt_j = j
+            break
+
+    return opt_j
+
+def data_driven_lambda_k(test_errors, verbose = False, tol = 1e-4):
+
+    min_err_j  = np.argmin(test_errors)          #O(k) = O(1) for fixed k
+    conv_err_j = conv_errs(test_errors, tol=tol) #O(k) = O(1) for fixed k
+
+    if conv_err_j < min_err_j:
+        if verbose:
+            print("lambda_k choosen by test error convergence")
+
+        opt_j = conv_err_j
+    else:
+        if verbose:
+            print("lambda_k choosen by minimum test error")
+        opt_j = min_err_j
+
+    return opt_j
 
 def get_modelselection(path, j):
     """
@@ -25,13 +51,13 @@ def get_modelselection(path, j):
         # indeces
         return len(path[j])
 
-def choose_j(path, test_errors = None, factor = 1/2):
+def choose_j(path, test_errors = None, factor = -1, verbose = False, tol = 1e-4, p = None):
     """
     Choose the best j based on the path and test errors
     Parameters
     ----------
     path : numpy.ndarray
-        The path of coefficients with shape (p,k)
+        The path of coefficients with shape (p,k) or (M,k) if it is from ISLE
         where p is the number of features and k is the number of lambda values
     test_errors : numpy.ndarray, optional
         The test errors with shape (k,2)
@@ -42,6 +68,12 @@ def choose_j(path, test_errors = None, factor = 1/2):
         if factor is between 0 and 1, then the function will return the index of the best j
         based on the number of non-zero coefficients
         The default is 1/2.
+    verbose : bool, optional
+        If True, the function will print the chosen j
+        The default is False.
+    tol : float, optional
+        The tolerance for the convergence of the test errors
+        The default is 1e-4.
 
     Returns
     -------
@@ -52,22 +84,26 @@ def choose_j(path, test_errors = None, factor = 1/2):
 
     # path has (p,k) shape, where p is the number of features
     # and k is the number of lambda values
-    if factor == -1 and test_errors is not None:
+    if factor == -1:
         # tests_errors contains two columns
         # the first one is the lambda values
         # the second one is the RMSE values
         # check 'calculate_test_errors' function
         
         # O(np) for obtain test_errors
-        return np.argmin(test_errors[:,1]) # O(k) = O(1) for fixed k
+        return data_driven_lambda_k(test_errors[:,1], verbose, tol) # O(k) = O(1) for fixed k
+        # return np.argmin(test_errors[:,1]) # O(k) = O(1) for fixed k
     
     else:
         if factor < 0 or factor > 1:
-            raise ValueError('Factor must be between 0 and 1 if nwerror is false and factor is not -1.')
+            raise ValueError('Factor must be between 0 and 1 if factor is not -1.')            
+        
+        if verbose:
+            print(f"lambda_k choosen in function of factor ({factor}).")
 
         # recall p is the number of features
-        p,k = path.shape
-        user_selection = np.round(p*factor).astype(int)
+        k = path.shape[1] if isinstance(path, np.ndarray) else len(path)
+        user_selection = np.round(p*factor).astype(int)            
 
         best_dist = np.inf
         best_j = 0
@@ -110,16 +146,17 @@ def read_CT(CT_file):
     n_spps = len(np.unique(CT_spps))
     return CT_spps, n_spps
 
-def row_selection(path, test_errors, 
-                factor = 1/2, inbetween = 0, 
-                check_spps = False, CT_file = None):
+def row_selection(path, test_errors,  p = None,
+                  factor = 1/2, inbetween = 0, 
+                  check_spps = False, CT_file = None,
+                  verbose = False, tol = 1e-4):
     
     if check_spps:
         CT_spps, n_spps = read_CT(CT_file) # O(T^4)
         
 
     # path has (p,k) shape, where p is the number of features
-    j_opt = choose_j(path, test_errors, factor = factor)
+    j_opt = choose_j(path, test_errors, factor = factor, verbose=verbose, tol=tol, p = p) # O(k) = O(1) for fixed k
     chosen_j = np.linspace(0, j_opt, 2 + inbetween,
                             endpoint=True, dtype=int) 
 

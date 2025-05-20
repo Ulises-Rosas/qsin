@@ -93,7 +93,6 @@ def main():
     elnet_args.add_argument("--K", type=int, default=100, metavar="",help="Number of lambda values to test between max_lambda and min_lambda. ")
     elnet_args.add_argument("--tol", type=float, default=0.00001,metavar="", help="Tolerance for convergence.")
     elnet_args.add_argument("--max_iter", type=int, default=1000,metavar="", help="Maximum number of iterations.")
-    elnet_args.add_argument("--nwerror", action="store_true",  help="Not write test RMSE error for every lambda used in the path.")
     elnet_args.add_argument("--wpath", action="store_true",  help="Write ElasticNet path. Warning: This can be large.")
     elnet_args.add_argument("--nstdy", action="store_true", help="Not standardize y. Standarizing y helps to numerical stability. ")
     elnet_args.add_argument("--cv", action="store_true", help="Use cross-validation to select the best lambda and alpha value.")
@@ -101,20 +100,20 @@ def main():
     elnet_args.add_argument("--ncores", type=int, default=1, metavar="", help="Number of cores to use for cross-validation.")
 
 
-    batch_args = parser.add_argument_group("Batch selection parameters")
+    batch_args = parser.add_argument_group("Row selection parameters (After the model is trained)")
     batch_args.add_argument("--prefix", type=str, default='batches', metavar="", help="Prefix for output files.")
-    batch_args.add_argument("--factor", type=float, default=1/2, metavar="", help="Reduction factor for selecting overlapped batches. If -1 and nwerror is False, then the batch with the minimum RMSE is selected.")
-    batch_args.add_argument("--inbetween", type=int, default=5, metavar="",help="Number of in-between batches for selecting overlapped batches.")
-    batch_args.add_argument("--window", type=int, default=1,metavar="", help="Window size for agglomerating disjoint batches. With the current there is no agglomeration.")
-    batch_args.add_argument("--check_spps", action="store_true", help="Check the number of unique species in the batches.")
-    
+    batch_args.add_argument("--factor", type=float, default=-1, metavar="", help="Proportion of row selection. If factor is -1, the proportion of row selected is based on test error.")
+    batch_args.add_argument("--inbetween", type=int, default=5, metavar="",help="Number of in-between sets from the solution of the beginning of the path to the final row selection.")
+    batch_args.add_argument("--check_spps", action="store_true", help="Check the number of unique species in the selected rows.")
+    batch_args.add_argument("--tol_test", type=float, default=1e-4, metavar="", help="""
+                            Tolerance for convergence of test errors for all k solutions in the ElNet path to pick the best lambda_k.
+                            If the test errors are not converging, then lambda_k with the minimum test error is picked.""")
 
     args = parser.parse_args()
     # print(args)
 
     # assert args.factor >= -1 and args.factor <= 1, "Factor must be between 0 and 1."
     assert args.inbetween >= 0, "Inbetween must be greater or equal to 0."
-    assert args.window >= 1, "Window must be greater or equal to 1."
     assert args.p_test > 0 and args.p_test < 1, "Proportion of test samples must be between 0 and 1."
     assert args.e > 0, "Epsilon must be greater than 0."
     assert args.K > 0, "K must be greater than 0."
@@ -132,7 +131,7 @@ def main():
     # O(nT^4) for reading only
     data = np.loadtxt(args.Xy_file, delimiter=',', skiprows=1)
     X, y = data[:, :-1], data[:, -1]
-    n,p = X.shape
+    n,p = X.shape # p (\approx T^4) used for row selection only
 
 
     num_test = int(n*args.p_test)
@@ -143,7 +142,7 @@ def main():
      estimators # None if isle is False
      ) = split_data_isle(X, y,
             num_test=num_test, seed=args.seed,
-            isle=args.isle, nwerror=args.nwerror, 
+            isle=args.isle,
             mx_p=args.max_features, max_depth=args.max_depth, max_leaves=args.max_leaf_nodes,
             param_file=args.param_file, eta=args.eta, nu=args.nu, M=args.M,
             verbose=args.verbose, nstdy = args.nstdy)
@@ -210,7 +209,7 @@ def main():
                    delimiter=',',
                    comments='')
     # O(n)
-    test_errors = calculate_test_errors(args, path, params, X_test, y_test)
+    test_errors = calculate_test_errors(args, path, params, X_test, y_test, write=True)
 
     if args.isle:
         picked_file = args.prefix + "_overlappedBatches_isle.txt"
@@ -228,18 +227,19 @@ def main():
 
     # overlapping batches
     # O(\rho T^4) for isle. If check_spps is True, it is O(T^4)
-    rows_selected = row_selection(path, test_errors,
+    rows_selected = row_selection(path, test_errors, p,
                                   args.factor, args.inbetween, args.check_spps,
-                                  args.CT_file) 
+                                  args.CT_file, args.verbose, args.tol_test,
+                                  ) 
     
     # O(\rho T^4) where \rho is the fraction of non-zero coefficients
     write_rows(picked_file, rows_selected)
 
 
-    if not args.nwerror and args.verbose:
+    if args.verbose:
         # print(test_errors)
         min_err_sel = len(rows_selected[-1]) # the best is the last one
-        print("Number of rows selected at min error: ", min_err_sel)
+        print("Number of rows selected at lambda_k solution: ", min_err_sel)
 
 if __name__ == "__main__":
     main()
