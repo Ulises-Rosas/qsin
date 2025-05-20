@@ -60,20 +60,17 @@ def calculate_test_errors(args, path, params, X_test, y_test, write = True):
         the RMSE value
 
     """
-    if args.nwerror:
-        test_errors = None
-    else:
-        test_errors = np.zeros((path.shape[1], 2))
-        for j in range(path.shape[1]):
-            beta_j = path[:, j]
-            rmse_j = rmse(y_test, X_test, beta_j)
-            test_errors[j, :] = [params['lam'][j], rmse_j]
+    test_errors = np.zeros((path.shape[1], 2))
+    for j in range(path.shape[1]):
+        beta_j = path[:, j]
+        rmse_j = rmse(y_test, X_test, beta_j)
+        test_errors[j, :] = [params['lam'][j], rmse_j]
 
-        if write:
-            np.savetxt(args.prefix + "_testErrors.csv",
-                        test_errors,
-                        delimiter=',',
-                        comments='')
+    if write:
+        np.savetxt(args.prefix + "_testErrors.csv",
+                    test_errors,
+                    delimiter=',',
+                    comments='')
 
     return test_errors
 
