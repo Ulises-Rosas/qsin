@@ -13,6 +13,7 @@ ftolAbs = 1e-6
 xtolAbs = 1e-3
 xtolRel = 1e-2
 up_to_constant = true
+optBL = false
 
 # ftolRel = 1e-1
 # ftolAbs = 1e-1
@@ -37,6 +38,7 @@ function help_func()
 
     Optional arguments:
         --outfile outfile: str; output file name. (default: $outfile)
+        --optBL: bool; optimize branch lengths (default: $optBL)
         --ftolRel: float; relative tolerance for the objective function (default: $ftolRel)
         --ftolAbs: float; absolute tolerance for the objective function (default: $ftolAbs)
         --xtolRel: float; relative tolerance for parameter changes (default: $xtolRel)
@@ -79,6 +81,9 @@ for i in eachindex(ARGS)
 
         elseif ARGS[i] == "--no_up_to_constant"
             global up_to_constant = false;
+
+        elseif ARGS[i] == "--optBL"
+            global optBL = true;
 
         elseif ARGS[i] == "--ftolRel"
             global ftolRel = parse(Float64, ARGS[i+1]);
@@ -162,15 +167,32 @@ end
     return sum(counts .* log.(qt.qnet.expCF))
 end
 
+function get_xy_i(dat, qlls_dict)
+    # creates a vector with the same order as the data CF table
+    xy_i = []
+    for row in eachrow(dat) # O(T^4)
+        # get the quartet from dat
+        quartet = Tuple(string.(collect(row[1:4])))
+        # println("type of quartet: ", typeof(quartet))
+        # println("quartet: ", quartet)
 
-function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant,
+        # call from dictionary
+        push!(xy_i, qlls_dict[quartet])
+    end
+    push!(xy_i, sum(xy_i))
+    
+    return xy_i
+end
+
+
+function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant, optBL,
     ftolRel, ftolAbs, xtolRel, xtolAbs; seed = 12038)
     
     Random.seed!(seed)
     # buckyCFfile = "./test_data/1_seqgen.CFs.csv"
     # netfile = "./test_data/n6/n6_sim1.txt"
 
-    @everywhere function process_network(netfile, all_buckyCF, permuted_names, up_to_constant,
+    @everywhere function process_network(netfile, all_buckyCF, permuted_names, up_to_constant, optBL,
         ftolRel, ftolAbs, xtolRel, xtolAbs)
         # O(1)
 
@@ -178,20 +200,25 @@ function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant,
         set_spps_names(netstart, permuted_names)
 
         try
-            # branch lengths from simulation are clock time-based
-            # and the time snaq considers branch lengths on
-            # coalescent units. For that reason we use 
-            # topologyMaxQPseudolik!
+            if optBL
+                # branch lengths from simulation are clock time-based
+                # and the time snaq considers branch lengths on
+                # coalescent units. For that reason we use 
+                # topologyMaxQPseudolik!
 
-            # it returns a new network with updated branch lengths
-            # and gamma values, which is not stored in any variable here.
-            # The original network is not modified.
-            # However, what is modified is all_buckyCF
-            topologyMaxQPseudolik!(netstart, all_buckyCF, 
-                                    ftolRel = ftolRel, 
-                                    ftolAbs = ftolAbs, 
-                                    xtolRel = xtolRel, 
-                                    xtolAbs = xtolAbs)
+                # it returns a new network with updated branch lengths
+                # and gamma values, which is not stored in any variable here.
+                # The original network is not modified.
+                # However, what is modified is all_buckyCF
+                topologyMaxQPseudolik!(netstart, all_buckyCF, 
+                                        ftolRel = ftolRel, 
+                                        ftolAbs = ftolAbs, 
+                                        xtolRel = xtolRel, 
+                                        xtolAbs = xtolAbs)
+            else
+                topologyQPseudolik!(netstart, all_buckyCF)
+            end
+
             # println(new_net)
             qlls = Dict{Tuple,Float64}()
             for qt in all_buckyCF.quartet
@@ -212,19 +239,30 @@ function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant,
     dat = DataFrame(CSV.File(buckyCFfile); copycols=false)
 
     results = @distributed (vcat) for netfile in networks
-        println(netfile)
+        println("optBL: ", optBL, ", file: ", netfile)
+        
 
         all_buckyCF_tmp = deepcopy(all_buckyCF)
         permuted_names = permuted_names[randperm(length(permuted_names))]
         # println("permuted names: ", permuted_names)
 
-        process_network(netfile, all_buckyCF_tmp, permuted_names, up_to_constant,
+        process_network(netfile, all_buckyCF_tmp, permuted_names, up_to_constant, optBL,
          ftolRel, ftolAbs, xtolRel, xtolAbs)
     end
 
     Xy = []
     # add column names, including the `sum`
     push!(Xy, make_colnames(dat))
+    
+    # one single simulation assessed
+    if typeof(results) == Dict{Tuple,Float64}
+
+        xy_i = get_xy_i(dat, results)
+        push!(Xy, xy_i)
+
+        writedlm(outputfile, Xy, ',')
+        return
+    end
 
     # O(n*T^4)
     for qlls_dict in results
@@ -233,22 +271,12 @@ function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant,
             continue
         end
 
-        # creates a vector with the same order as the data CF table
-        xy_i = []
-        for row in eachrow(dat) # O(T^4)
-            # get the quartet from dat
-            quartet = string.(Tuple(row[1:4])) 
-
-            # call from dictionary
-            push!(xy_i, qlls_dict[quartet])
-        end
-        push!(xy_i, sum(xy_i))
-
+        xy_i = get_xy_i(dat, qlls_dict)
         push!(Xy, xy_i)
     end
 
     writedlm(outputfile, Xy, ',')
 end
 
-@time evaluate_sims(nets, CFfile, outfile, up_to_constant, 
+@time evaluate_sims(nets, CFfile, outfile, up_to_constant, optBL,
 ftolRel, ftolAbs, xtolRel, xtolAbs; seed = seed)
