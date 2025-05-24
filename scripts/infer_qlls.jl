@@ -14,12 +14,16 @@ xtolAbs = 1e-3
 xtolRel = 1e-2
 up_to_constant = true
 optBL = false
+bl_mean = 0.5
+scale_bl = false
+randexp_bl = false
 
 # ftolRel = 1e-1
 # ftolAbs = 1e-1
 # xtolAbs = 1e-1
 # xtolRel = 1e-1
 seed = 12038
+
 
 function help_func()
     # make a help message
@@ -39,6 +43,10 @@ function help_func()
     Optional arguments:
         --outfile outfile: str; output file name. (default: $outfile)
         --optBL: bool; optimize branch lengths (default: $optBL)
+        --bl_mean: float; mean branch length (default: $bl_mean)
+        --scale_bl: bool; scale branch lengths with bl_mean (default: $scale_bl)
+        --randexp_bl: bool; set branch lengths with random exponential distribution
+                      (default: $randexp_bl)
         --ftolRel: float; relative tolerance for the objective function (default: $ftolRel)
         --ftolAbs: float; absolute tolerance for the objective function (default: $ftolAbs)
         --xtolRel: float; relative tolerance for parameter changes (default: $xtolRel)
@@ -85,6 +93,15 @@ for i in eachindex(ARGS)
         elseif ARGS[i] == "--optBL"
             global optBL = true;
 
+        elseif ARGS[i] == "--bl_mean"
+            global bl_mean = parse(Float64, ARGS[i+1]);
+        
+        elseif ARGS[i] == "--scale_bl"
+            global scale_bl = true;
+        
+        elseif ARGS[i] == "--randexp_bl"
+            global randexp_bl = true;
+
         elseif ARGS[i] == "--ftolRel"
             global ftolRel = parse(Float64, ARGS[i+1]);
         
@@ -126,7 +143,30 @@ addprocs(ncores)
 @suppress @everywhere using DataFrames;
 @everywhere using PhyloNetworks;
 
-function get_uniq_names(all_buckyCF)
+
+@everywhere function rand_exp(rate, size;  rng = MersenneTwister(12038))
+    # rng = MersenneTwister(seed)
+    rns = rand(rng, Float64, size)
+    return -log.(rns) ./ rate
+end
+
+# set branch lengths with exp R.V. with average 1/rate
+@everywhere function bl_randexp(rate, net; rng = MersenneTwister(12038))
+    bls = rand_exp(rate, length(net.edge), rng=rng)
+    for (i,e) in enumerate(net.edge)
+        e.length = bls[i]
+    end
+end
+
+# scale branch lengths to a new average
+@everywhere function bl_scale(new_ave, net)
+    old_ave = sum([e.length for e in net.edge])/length(net.edge)
+    for e in net.edge
+        e.length = (e.length * new_ave) / old_ave
+    end    
+end
+
+@everywhere function get_uniq_names(all_buckyCF)
     # get all the species names
     spps_names = Set{String}()
     for q in all_buckyCF.quartet
@@ -184,20 +224,40 @@ function get_xy_i(dat, qlls_dict)
     return xy_i
 end
 
+@everywhere function set_bls(net, names, scale_bl, randexp_bl, bl_mean; rng)
+
+    names = names[randperm(rng, length(names))]
+    
+    # change species names from random networks
+    # with the names from the CFs
+    set_spps_names(net, names)
+
+    if scale_bl
+        println("scaling branch lengths with average: ", bl_mean)
+        bl_scale(bl_mean, net)
+        return
+    end
+
+    if randexp_bl
+        println("setting branch lengths with exp. dist. with mean: ", bl_mean)
+        rate = 1/bl_mean
+        bl_randexp(rate, net; rng = rng)
+        return 
+    end
+
+end
 
 function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant, optBL,
+    scale_bl, randexp_bl, bl_mean,
     ftolRel, ftolAbs, xtolRel, xtolAbs; seed = 12038)
     
-    Random.seed!(seed)
+    rng = MersenneTwister(seed)
     # buckyCFfile = "./test_data/1_seqgen.CFs.csv"
-    # netfile = "./test_data/n6/n6_sim1.txt"
+    # networks = ["./test_data/n6/n6_sim1312.txt",]
 
-    @everywhere function process_network(netfile, all_buckyCF, permuted_names, up_to_constant, optBL,
+    @everywhere function process_network(tmp_net, tmp_CF, up_to_constant, optBL,
         ftolRel, ftolAbs, xtolRel, xtolAbs)
         # O(1)
-
-        netstart = readTopology(netfile) # O(n)
-        set_spps_names(netstart, permuted_names)
 
         try
             if optBL
@@ -210,43 +270,44 @@ function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant, optBL,
                 # and gamma values, which is not stored in any variable here.
                 # The original network is not modified.
                 # However, what is modified is all_buckyCF
-                topologyMaxQPseudolik!(netstart, all_buckyCF, 
+                println("optimizing branch lengths")
+                topologyMaxQPseudolik!(tmp_net, tmp_CF, 
                                         ftolRel = ftolRel, 
                                         ftolAbs = ftolAbs, 
                                         xtolRel = xtolRel, 
                                         xtolAbs = xtolAbs)
             else
-                topologyQPseudolik!(netstart, all_buckyCF)
+                topologyQPseudolik!(tmp_net, tmp_CF)
             end
 
             # println(new_net)
             qlls = Dict{Tuple,Float64}()
-            for qt in all_buckyCF.quartet
+            for qt in tmp_CF.quartet
                 qlls[Tuple(qt.taxon)] = q_pseudo(qt; up_to_constant = up_to_constant)
             end
             # println(qlls)
             return qlls
 
         catch e
-            println("Error in ", netfile, ": ", e)
+            println("Error in ", tmp_net, ": ", e)
             return nothing
         end
     end
 
     all_buckyCF = readTableCF(buckyCFfile)
     # get all the species names
-    permuted_names = get_uniq_names(all_buckyCF) # unordered   
+    CF_names = get_uniq_names(all_buckyCF) # unordered   
     dat = DataFrame(CSV.File(buckyCFfile); copycols=false)
 
     results = @distributed (vcat) for netfile in networks
-        println("optBL: ", optBL, ", file: ", netfile)
+        println("file: ", netfile)
         
+        all_buckyCF_tmp = deepcopy(all_buckyCF)        
+        netstart = readTopology(netfile) # O(n)
 
-        all_buckyCF_tmp = deepcopy(all_buckyCF)
-        permuted_names = permuted_names[randperm(length(permuted_names))]
-        # println("permuted names: ", permuted_names)
+        set_bls(netstart, CF_names, scale_bl, randexp_bl, bl_mean; rng = rng)
 
-        process_network(netfile, all_buckyCF_tmp, permuted_names, up_to_constant, optBL,
+        process_network(netstart, all_buckyCF_tmp, up_to_constant, optBL,
          ftolRel, ftolAbs, xtolRel, xtolAbs)
     end
 
@@ -279,4 +340,5 @@ function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant, optBL,
 end
 
 @time evaluate_sims(nets, CFfile, outfile, up_to_constant, optBL,
-ftolRel, ftolAbs, xtolRel, xtolAbs; seed = seed)
+                    scale_bl, randexp_bl, bl_mean,
+                    ftolRel, ftolAbs, xtolRel, xtolAbs; seed = seed)
