@@ -13,6 +13,7 @@ seed = 12038;
 nruns = 10;
 Nfail = 75;
 prefix = "NetInference";
+verbose = true;
 ncores = 1;
 
 
@@ -92,17 +93,6 @@ if startfile == "" || buckyCFfile == "" || batches == ""
     help_func();
 end
 
-# println("startfile: ", startfile);
-# println("buckyCFfile: ", buckyCFfile);
-# println("batches: ", batches);
-# println("h_max: ", h_max);
-# println("n_epochs: ", n_epochs);
-# println("tk: ", tk);
-# println("seed: ", seed);
-# println("nruns: ", nruns);
-# println("Nfail: ", Nfail);
-# println("prefix: ", prefix);
-# println("ncores: ", ncores)
 
 using Suppressor;
 using Distributed;
@@ -115,12 +105,173 @@ addprocs(ncores)
 @suppress @everywhere using PhyloNetworks;
 
 
-function checkconvergence(all_liks, l_k)
-    l_best_abs = maximum(abs.(all_liks));
-    diff0 = l_k - all_liks[end];
-    diff = abs(diff0)/l_best_abs;
-    # take the maximum all_liks
-    println("\nDiff: ", diff, "; lik = ", l_k, "\n");
+function LookConvergence(all_nets)
+    # look for relative convergence
+    if length(all_nets) >= 3
+
+        curr_lik = all_nets[end].loglik;
+        prev_lik = all_nets[end-1].loglik;
+        diff = abs(curr_lik - prev_lik)/abs(prev_lik);
+    
+        println("\nrel diff: ", diff);
+    end
+end
+
+"""
+CT: DataFrame
+    DataFrame with the CFs\\
+batch: str
+    string with the indices of the rows to subsample\\
+"""
+function subsampleCF(CT, batch)
+    idx = [parse(Int, j) for j in split(batch, ",")];
+    return readTableCF(CT[idx, :]);
+end
+
+function get_net(N_k, CT_k, h_max, nruns, Nfail, seed)
+
+    try
+        oldstd = stdout
+        redirect_stdout(devnull)
+        return snaq!(N_k, CT_k,
+                      hmax=h_max,
+                      filename="", 
+                      runs=nruns, 
+                      verbose=false, 
+                      Nfail=Nfail,
+                      seed=seed
+                      );
+        redirect_stdout(oldstd) # recover original stdout
+    catch
+        return nothing;
+    end
+end
+
+function writeNets_Liks(all_nets, prefix)
+    lik_file = prefix * "_liks.txt";
+    net_file = prefix * "_nets.txt";
+
+    all_nets = all_nets[2:end];
+
+    if length(all_nets) == 0
+        return;
+    end
+
+    open(lik_file, "w") do io
+        for i in eachindex(all_nets);
+            write(io, string(all_nets[i].loglik), "\n");
+        end
+    end
+
+    open(net_file, "w") do io
+        for i in eachindex(all_nets);
+            write(io, writeTopology(all_nets[i]), "\n");
+        end
+    end
+
+end
+
+"""
+get the networks for each batch in a lasso-like path (warm starts).
+It infers the phylogenetic networks for each batch and considers the best network as a 
+starting solution for the next batch.
+
+when tk = Inf, 
+    it always takes the previous solution as a starting solution.
+when tk < Inf, 
+    i) takes the best network so far as a starting solution or
+    ii) takes the previous solution as a starting solution with probability p.
+
+tk: float
+    temperature\\
+e: int
+    epoch\\
+l_best: float
+    best pseudo-deviance so far\\
+
+all_batches: Array{String}
+    array with the batches\\
+all_nets: Array{PhyloNetwork}
+    array with the networks\\
+CT: DataFrame
+    DataFrame with the CFs\\
+h_max: int
+    maximum number of hybridizations\\
+nruns: int
+    number of runs\\
+Nfail: int
+    number of failures\\
+seed: int
+    seed for the random number generator\\
+verbose: bool
+    print messages\\
+"""
+function batches_path(tk, e, all_batches, l_best, all_nets, CT, h_max,  nruns, Nfail, seed, verbose)
+    
+    net_k = nothing;
+    for (i,batch) in enumerate( all_batches )
+        # i = 5
+        # batch = all_batches[i]
+        if verbose
+            println("Processing batch ", i, " epoch ", e);
+        end
+
+        # subsample rows using batch's indices
+        CT_k = subsampleCF(CT, batch);
+        # get the network by using the previous solution as a warm start
+        # even if this solution is suboptimal, accepted with probability p
+        try
+            oldstd = stdout
+            redirect_stdout(devnull)
+            net_k = snaq!(all_nets[end], CT_k, hmax=h_max,
+                          runs=nruns, Nfail=Nfail, seed=seed, 
+                          verbose=false, filename="",);
+            # TODO: control for prob of NNI.
+            redirect_stdout(oldstd)
+        catch
+            println("\nFailed to find a network for batch ", i, " epoch ", batch, "\n");
+            continue;        
+        end
+
+        # if net_k == nothing
+        #     println("\nFailed to find a network for batch ", i, " epoch ", batch, "\n");
+        #     continue;
+        # end
+        
+        dE = net_k.loglik - l_best;
+        if dE <= 0
+            # The quartet pseudo-deviance is such that a perfect fit corresponds 
+            # to a deviance of 0.0. You want to minimize the deviance. 
+            # If there was an improvement, then we added to the list of networks
+            # and update the best pseudo-deviance. 
+            if verbose
+                println("\nOptimal move: Accepted with dE ", dE, "\n");
+            end
+
+            push!(all_nets, deepcopy(net_k));
+            l_best = net_k.loglik;
+        else
+            # if there was not an improvement, then we take the new network
+            # with probability p. 
+
+            # notice that if tk = Inf, then p = 1 and we always take the new network
+            # as a starting solution, which it is like a lasso path with warm starts.
+            p = exp(-dE/tk);
+            if rand() <= p
+                if verbose
+                    println("\nSuboptimal move: Accepted with probability ", p, "\n");
+                end
+
+                push!(all_nets, deepcopy(net_k));
+            end
+        end
+
+        if verbose
+            LookConvergence(all_nets);
+        end
+    end
+
+    return l_best, all_nets;
 end
 
 
@@ -143,150 +294,60 @@ nruns: int
     number of runs. SNaQ has 10 runs. This one has 1.\\
 Nfail: int
     number of failures. SNaQ has 75. This one has 75.\\
+prefix: str
+    prefix for the output files\\
+verbose: bool
+    print messages\\
+rate: int
+    rate for decreasing the temperature\\
 """
 function main(startfile, buckyCFfile, batches, 
-    h_max = 2, n_epochs = 1, tk = 1000, seed = 120,
-    nruns = 10, Nfail = 75, prefix = "./test_sims/disjointInference")
+    h_max = 1, n_epochs = 1, tk = Inf, seed = 12038,
+    nruns = 10, Nfail = 75, 
+    prefix = "./test_sims/disjointInference",
+    verbose = true, 
+    rate = 10
+    )
     
-    # startfile = "/Users/ulises/Desktop/SLL/SparseQuartets copy/1_seqgen.QMC_n15.tre";
-    # buckyCFfile = "/Users/ulises/Desktop/SLL/SparseQuartets copy/1_seqgen.CFs_n15.csv";
-    # # batches = "/Users/ulises/Desktop/SLL/SparseQuartets copy/test_sims/batches_n15_qll_g2.txt";
-    # # batches = "/Users/ulises/Desktop/SLL/SparseQuartets copy/test_sims/linear_batches_overlappedBatches.txt";
-    # batches = "/Users/ulises/Desktop/SLL/SparseQuartets copy/test_sims/linear_batches_disjointBatches.txt";
+    # startfile    = "./test_data/1_seqgen.QMC.tre";
+    # buckyCFfile  = "./test_data/1_seqgen.CFs.csv";
+    # batches      = "./test_data/linear_batches_overlappedBatches.txt";
     # h_max = 1;
-    # read batches file
+    
 
+    # read batches file
     all_batches = readlines(batches);
-    # split csv the first line
-    # ARGS = 
-    # batch_files[1]
-    
-    
-    netstart    = readTopology(startfile);
-    # all_buckyCF = readTableCF(buckyCFfile);
-    # h_max = hmax;
-    
+    # read intial network
+    netstart = readTopology(startfile);
     # read csv file buckyCFfile
     CT = CSV.read(buckyCFfile, DataFrame);
-    
-    
-    
-    N_prev = deepcopy(netstart);
-    all_liks = [];
-    all_nets = [];
-    # tk = 1000;
-    
-    i = 0;
-    # n_epochs = 1;
-    error_at = [];
-    net_k = deepcopy(netstart);
-    for epoch in 1:n_epochs
-        i = 0
-        if epoch > 1
+        
+    # best pseudo deviance
+    l_best = Inf;
+    all_nets = [deepcopy(netstart)];
+
+    for e in 1:n_epochs
+        # e = 1
+        if (e > 1) & (tk < Inf) & (e % rate == 0)
             tk = 0.98 * tk;
         end
-        for batch in all_batches
-            i += 1
-            println("Processing batch ", i, " epoch ", epoch)
+        # fit all batches in a lasso-like path (warm starts).
+        # It infers the phylogenetic networks for each batch
+        # and considers the best network as a starting solution
+        # for the next batch.
+        l_best, new_nets = batches_path(tk, e, all_batches, l_best, all_nets, CT, h_max, 
+                                        nruns, Nfail, seed, verbose);
 
-            # batch = all_batches[i]
-    
-            idx = [parse(Int, j) for j in split(batch, ",")];
-            CT_k = readTableCF(CT[idx, :]);
-            try
-                oldstd = stdout
-                redirect_stdout(devnull)
-                net_k = snaq!(N_prev, CT_k,
-                    hmax=h_max,
-                    filename="", 
-                    runs=nruns, 
-                    verbose=false, 
-                    Nfail=Nfail,
-                    seed=seed, 
-                    );
-                redirect_stdout(oldstd) # recover original stdout
-            catch
-                println("Error in ", batch);
-                push!(error_at, N_prev);
-                if error_at[end] == N_prev
-                    println("Error in ", batch);
-                    N_prev = all_nets[end-1];
-                end
-                continue
-            end
-            
-            if i == 1 && epoch == 1
-                # l_k = topologyQPseudolik!(net_k, all_buckyCF);
-                l_k = net_k.loglik;
+        all_nets = vcat(all_nets, new_nets);
 
-                push!(all_liks, l_k);
-                push!(all_nets, net_k);
-                N_prev = deepcopy(net_k);
-                continue;
-            end
-    
-            # l_k = topologyQPseudolik!(net_k, all_buckyCF);
-            l_k = net_k.loglik;
-            l_best = minimum(all_liks);
+        println("\nEpoch ", e, " done\n");
+        println("Best pseudo-deviance: ", l_best, "\n");
 
-            dE = l_k - l_best;
-                
-            if dE < 0
-                """
-                The quartet pseudo-deviance is the
-                    **negative** log pseudo-likelihood, up
-                    to an additive constant, such that
-                    a perfect fit corresponds to a deviance
-                    of 0.0. 
-    
-                => it is a minimization problem              
-                """
-                println("\nOptimal move: Accepted with likelihood diff. ", abs(dE), "\n");
-                N_prev = deepcopy(net_k);
-                checkconvergence(all_liks, l_k);
-
-                push!(all_liks, l_k);
-                push!(all_nets, net_k);
-            
-            else
-                # make a random uniform number
-                # from 0 to 1
-                xi = rand();
-                p = exp(-dE/tk);
-                println("\np =  ", p, "");
-                if xi <= p
-                    println("\nSuboptimal move: Accepted with probability ", p, "\n");
-                    N_prev = deepcopy(net_k);
-                    checkconvergence(all_liks, l_k);
-
-                    push!(all_liks, l_k);
-                    push!(all_nets, net_k);
-                end
-            end
-        end
     end
-    
-    lik_file = prefix * "_liks.txt";
-    net_file = prefix * "_nets.txt";
+    # write nets and its corresponding pseudo-deviance
+    # from index 2 to the end
+    writeNets_Liks(all_nets, prefix);
 
-    open(lik_file, "w") do io
-        for i in eachindex(all_liks);
-            write(io, string(all_liks[i]), "\n");
-        end
-    end
-    
-    open(net_file, "w") do io
-        for i in eachindex(all_nets);
-            write(io, writeTopology(all_nets[i]), "\n");
-        end
-    end
 end
 
 @time main(startfile, buckyCFfile, batches, h_max, n_epochs, tk, seed, nruns, Nfail, prefix);
-
-
-# # using PhyloPlots;
-# # using RCall;
-# # netstart = readInputTrees("./test_sims/all_nets.txt");
-# # plot(netstart[2], showgamma=true);
-
