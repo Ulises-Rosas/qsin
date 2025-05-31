@@ -14,7 +14,7 @@ xtolAbs = 1e-3
 xtolRel = 1e-2
 up_to_constant = true
 optBL = false
-bl_mean = 0.5
+bl_mean = 1.25
 scale_bl = false
 randexp_bl = false
 
