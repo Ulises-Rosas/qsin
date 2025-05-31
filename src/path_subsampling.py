@@ -203,6 +203,8 @@ def main():
 
 
     if args.wpath:
+        # the first column is the lambda values
+        # which adds one extra column into the path
         lam_path = np.concatenate((params['lam'].reshape(-1, 1), path.T), axis=1)
         np.savetxt(args.prefix + "_elnetPath.csv", 
                    lam_path, 
