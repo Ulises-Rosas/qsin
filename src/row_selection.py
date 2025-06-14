@@ -141,7 +141,7 @@ def add_offset(beta_j_nz):
         return [i + 1 for i in beta_j_nz]
 
 def read_CT(CT_file):
-    CT = np.loadtxt(CT_file, delimiter=',', skiprows=1)
+    CT = np.loadtxt(CT_file, delimiter=',', skiprows=1, dtype=str)
     CT_spps = CT[:, :4]
     n_spps = len(np.unique(CT_spps))
     return CT_spps, n_spps
