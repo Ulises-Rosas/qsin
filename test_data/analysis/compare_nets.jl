@@ -7,6 +7,7 @@ nets = [];
 outfile = "diffs.txt";
 thresh = 0.0;
 ncores = 1;
+let_root = false;
 
 function help_func()
     # make a help message
@@ -26,6 +27,7 @@ function help_func()
         --outfile outfile: str; output file name. (default: $outfile)
         --thresh thresh: float; threshold for hybrid nodes. (default: $thresh)
         --ncores: int; number of cores (default: $ncores)
+        --let_root: bool; let the distance be obtained after rooting (default: $let_root)
         --help, -h: show this help message
 """;
     println(help_message);
@@ -59,6 +61,9 @@ for i in eachindex(ARGS)
         elseif  ARGS[i] == "--outfile"
             global outfile = ARGS[i+1];
 
+        elseif ARGS[i] == "--let_root"
+            global let_root = true;
+
         elseif ARGS[i] == "--ncores"
             global ncores = parse(Int, ARGS[i+1]);
 
@@ -84,28 +89,24 @@ using  DelimitedFiles;
 @suppress @everywhere using DataFrames;
 @suppress @everywhere using PhyloNetworks;
 
-@everywhere function get_dist(true_net, net_file, root, thresh);
+@everywhere function get_dist(true_net, net_file, root, thresh; let_root = true);
+
+    # true_net = true_nets_tmp[end]
+    # net_file = net_files[1]
     
-    # target_file it is just for printing purposes
-    # if ~root_exist(true_net, "true_net_file", root, true)
-    #     return error("Root taxa is not at $main_net")
-    # end
+    tmp_net = readInputTrees(net_file)[1]
+    deleteHybridThreshold!(tmp_net, thresh)
 
-    # deleteHybridThreshold!(target_net, thresh);
-    rootatnode!(true_net, root);
+    if let_root
+        rootatnode!(tmp_net, root)
+        rootatnode!(true_net, root)
+    end
 
-    tmp_net = readInputTrees(net_file)[1];    
-    # if ~root_exist(tmp_net, net_file, root, true)
-    #     return error("Root taxa is not at $net_file")
-    # end
 
-    deleteHybridThreshold!(tmp_net, thresh);
-    rootatnode!(tmp_net, root)
-
-    return hardwiredClusterDistance(true_net, tmp_net, true);
+    return hardwiredClusterDistance(true_net, tmp_net, let_root);
 end
 
-@everywhere function root_and_dist(all_taxa, true_net, net_file, thresh)
+@everywhere function root_and_dist(all_taxa, true_net, net_file, thresh; let_root = true)
 
     # all_taxa = deepcopy(all_taxa);
     # curr_root = deepcopy(root);
@@ -115,10 +116,20 @@ end
     best_dist = Inf;
     best_root = NaN;
 
+    if !let_root
+        try
+            best_dist = get_dist(true_net, net_file, nothing, thresh; let_root = false);
+        catch e
+            nothing
+        end
+
+        return best_dist, NaN;
+    end
+
     for curr_root in all_taxa
         # curr_root=all_taxa[2];
         try
-            curr_dist = get_dist(true_net, net_file, curr_root, thresh);
+            curr_dist = get_dist(true_net, net_file, curr_root, thresh; let_root = true);
 
             # if verbose
             # println("Root: ", curr_root);
@@ -173,7 +184,7 @@ function report_results(all_dists_mat)
 
 end
 
-@everywhere function evaluate_true_net( true_nets, all_taxa, tmp_net_file, thresh)
+@everywhere function evaluate_true_net( true_nets, all_taxa, tmp_net_file, thresh; let_root = true)
 
     best_net_tmp_dist = Inf;
     best_net_tmp_root = NaN;
@@ -183,7 +194,7 @@ end
 
         all_taxa_tmp = deepcopy(all_taxa);
         # println("all_taxa_tmp: ", all_taxa_tmp);
-        tmp_dist, tmp_root = root_and_dist(all_taxa_tmp, true_net, tmp_net_file, thresh);
+        tmp_dist, tmp_root = root_and_dist(all_taxa_tmp, true_net, tmp_net_file, thresh; let_root = let_root);
 
         if !isnan(tmp_dist) && tmp_dist < best_net_tmp_dist
             best_net_tmp_dist = tmp_dist;
@@ -202,9 +213,10 @@ end
 
     # # get base name
     tmp_name_base = basename(tmp_net_file);
-
-    row = match(r".*_row([0-9]+)_.*", tmp_name_base)[1];
+    
+    row = match(r".*_row(.+)_[bn].*", tmp_name_base)[1];
     boot =  match(r".*_boot([0-9]+)_.*", tmp_name_base)[1];
+    # boot =  match(r".*_boot([0-9]+).net", tmp_name_base)[1];
 
     println( 
         "tmp_net_file: ", tmp_name_base,
@@ -213,11 +225,11 @@ end
         " best_net_tmp_dist: ", best_net_tmp_dist, 
         " best_net_tmp_root: ", best_net_tmp_root
     );
-
+    # println([row, boot, best_net_tmp_dist, best_net_tmp_root])
     return [row, boot, best_net_tmp_dist, best_net_tmp_root]
 end
 
-function main(true_nets_file, thresh, net_files, outfile)
+function main(true_nets_file, thresh, net_files, outfile; let_root = true)
 
     # true_nets_file = "/Users/ulisesrosas/Desktop/qsin/test_data/n15_hyb3.txt";
     # net_files = [
@@ -234,26 +246,27 @@ function main(true_nets_file, thresh, net_files, outfile)
     all_dists = @distributed (vcat) for tmp_net_file in net_files
         true_nets_tmp = deepcopy(true_nets);
         all_taxa_tmp = deepcopy(all_taxa);
-        tmp = evaluate_true_net(true_nets_tmp, all_taxa_tmp, tmp_net_file, thresh);
+        tmp = evaluate_true_net(true_nets_tmp, all_taxa_tmp, tmp_net_file, thresh; let_root = let_root)
 
-        DataFrame(reshape(tmp, 1, :), :auto);
+        [tmp]
     end
 
     println("\n");
-    arr = Matrix(all_dists);
-    report_results(arr);
-    writedlm(outfile, arr, ',');
+    # arr = Matrix(all_dists);
+    # report_results(arr);
+    # println("all_dists: ", all_dists);
+    writedlm(outfile, all_dists, ',');
 
 end
 
 
 println("main_net: ", main_net);
-println("nets : ", nets);
+println("len of nets : ", length(nets));
 println("outfile: ", outfile);
 println("thresh: ", thresh);
 
 
-@time main(main_net, thresh, nets, outfile);
+@time main(main_net, thresh, nets, outfile; let_root = let_root);
 
 #TODO: test it out. It should work with the following command
 """
