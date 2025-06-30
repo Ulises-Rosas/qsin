@@ -12,39 +12,6 @@ from qsin.isle_path import split_data_isle, get_new_path
 from qsin.ElasticNetCV import ElasticNetCV_alpha
 from qsin.row_selection import row_selection, write_rows
 
-
-def re_center_for_isle(T_test, T_train):
-    """
-    Center data for ISLE.  When using ISLE,
-    the X matrix is a set of predictions from
-    decision trees, which are not centered. 
-    Since ISLE assumes there is an intercept term,
-    and the lasso/elnet post-processing assumes the data
-    is centered, we need to center the data.
-
-    Parameters
-    ----------
-    T_test : numpy.ndarray
-        The predictors for the test set
-    
-    T_train : numpy.ndarray
-        The predictors for the training set
-
-    Returns
-    -------
-    numpy.ndarray
-        The rescaled predictors for the test set and the training set
-    """
-
-    u = np.mean(T_train, axis=0)
-    sd = np.std(T_train, axis=0)
-    
-    sd_zero = sd == 0
-    if np.any(sd_zero):
-        sd[sd_zero] = 1
-
-    return (T_test - u)/sd, (T_train - u)/sd
-
 def max_features_type(value):
     try:
         return float(value) if value not in ['sqrt', 'log2'] else value
@@ -75,11 +42,11 @@ def main():
 
 
     isle_args = parser.add_argument_group("ISLE parameters (if --isle is used)")
-    isle_args.add_argument("--eta", type=float, default=0.5, metavar="", help="Proportion of observations to use in each tree.")
-    isle_args.add_argument("--nu", type=float, default=0.1, metavar="", help="Learning rate.")
-    isle_args.add_argument("--M", type=int, default=500, metavar="", help="Number of trees in the ensemble.")
+    isle_args.add_argument("--eta", type=float, nargs='+', default=[0.5], metavar="", help="Proportion of observations to use in each tree.")
+    isle_args.add_argument("--nu", type=float, nargs='+', default=[0.1], metavar="", help="Learning rate.")
+    isle_args.add_argument("--max_leaf_nodes", type=int, nargs='+' , default=[6], metavar="", help="Maximum number of leaf nodes in the decision tree.")
     isle_args.add_argument("--max_depth", type=int, default=5, metavar="", help="Maximum depth of the decision tree.")
-    isle_args.add_argument("--max_leaf_nodes", type=int, default=6, metavar="", help="Maximum number of leaf nodes in the decision tree.")
+    isle_args.add_argument("--M", type=int, default=500, metavar="", help="Number of trees in the ensemble.")
     # default according Hastie et al. 2009, pp. 592
     isle_args.add_argument("--max_features", type=max_features_type, default=0.3, metavar="", help="Maximum proportion of features it is considered to grow nodes in a regression tree. It can also be 'sqrt' or 'log2'.")
     isle_args.add_argument("--param_file", type=str, default=None, metavar="", help="""JSON file with parameters for the decision tree
@@ -123,8 +90,6 @@ def main():
     assert args.M > 0, "Number of trees in the ensemble must be greater than 0."
     assert args.max_depth > 0, "Maximum depth of the decision tree must be greater than 0."
     assert (isinstance(args.max_features, float) and args.max_features > 0 and args.max_features <= 1) or args.max_features in ['sqrt', 'log2'], "Maximum proportion of features must be between 0 and 1 or 'sqrt' or 'log2'."
-    assert args.eta > 0 and args.eta <= 1, "Proportion of observations to use in each tree must be between 0 and 1."
-    assert args.nu >= 0 and args.nu <= 1, "Learning rate must be between 0 and 1."
     assert args.prefix != "", "Prefix must not be empty."
     # endregion: parse arguments
 
@@ -142,18 +107,8 @@ def main():
      estimators # None if isle is False
      ) = split_data_isle(X, y,
             num_test=num_test, seed=args.seed,
-            isle=args.isle,
-            mx_p=args.max_features, max_depth=args.max_depth, max_leaves=args.max_leaf_nodes,
-            param_file=args.param_file, eta=args.eta, nu=args.nu, M=args.M,
-            verbose=args.verbose, nstdy = args.nstdy)
-    
-    if args.isle:
-        # standarize for ISLE post-processing uses lasso/elnet
-        # and lasso/elnet assumes the data is standarized
-        if args.verbose:
-            print("Re-standarize data for ISLE")
-        X_test, X_train = re_center_for_isle(X_test, X_train)
-
+            isle=args.isle, max_leaves=args.max_leaf_nodes, eta=args.eta, nu=args.nu,
+            nstdy = args.nstdy, args=args)
 
     all_max_lams = [max_lambda(X_train, y_train, alpha=a) for a in args.alpha]
     if args.verbose:
