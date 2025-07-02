@@ -204,8 +204,7 @@ class Lasso:
             # He-styled 
             # initialization 
             # of the coefficients
-            # np.random.seed(self.seed)
-            # self.beta = np.random.normal(0, np.sqrt(2/p), size=p)
+            # self.beta = rng.normal(0, np.sqrt(2/p), size=p)
             
             # zero initialization
             self.beta = np.zeros(p, dtype=X.dtype, order='F')
