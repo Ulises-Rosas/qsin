@@ -14,6 +14,8 @@ class Lasso:
     """
     lasso model.
     It assumes that the input data has been standardized
+
+    init beta is a zero vector
     """
     def __init__(self, 
                  max_iter=300, 
@@ -25,7 +27,6 @@ class Lasso:
                  tol = 0.001,
                  init_iter = 1,
                  copyX = False,
-                 seed = 123,
                  **kwargs):
         
         self.max_iter = max_iter
@@ -33,7 +34,6 @@ class Lasso:
         self.prev_lam = prev_lam
         self.tol = tol
         self.warm_start = warm_start
-        self.seed = seed
 
         self.fit_intercept = fit_intercept
         self.beta = np.array([])
