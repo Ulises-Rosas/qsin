@@ -3,7 +3,7 @@ import json
 from copy import deepcopy
 from collections import deque
 
-from qsin.sparse_solutions import split_data
+from qsin.sparse_solutions_hd import ElasticNet, split_data, lasso_path
 from qsin.utils import progressbar, standardize_Xy
 
 import numpy as np
@@ -66,9 +66,10 @@ def make_isle_ensemble(X_train, y_train, model, eta, nu,
 
     F_train = np.zeros((n_train,M))
     estimators = deque()
-    # O(MnT^4log(n))
-    for i in progressbar(range(M), "Computing trees: ", 40):
 
+    pb = progressbar(range(M), "Computing trees: ", 40) if verbose else range(M)
+    # O(MnT^4log(n))
+    for i in pb:
         model.set_params(random_state = rng)
         # random sample the data, including the memory function
         # O(nT^4)
@@ -115,12 +116,6 @@ def make_F_test(X_test, estimators):
     for i,m in enumerate(estimators):
         F_test[:,i] = m.predict(X_test) # O(n)
     return F_test
-
-# def split_data_isle(X, y, num_test, seed, 
-#                     isle=True, 
-#                     mx_p=1/2, max_depth=5, param_file=None, max_leaves=6,
-#                     eta=0.5, nu=0.1, M=100,
-#                     verbose=True, nstdy = True, args=None):
 
 def split_data_isle(X, y, num_test, seed, 
                     isle=True, max_leaves=6, eta=0.5, nu=0.1,
@@ -201,7 +196,7 @@ def split_data_isle(X, y, num_test, seed,
     return X_train, X_test, y_train, y_test, estimators
     
 
-def isle_ensemble_pipe(X_train, y_train, X_test, max_leaves, eta, nu, rng, args):
+def isle_ensemble_pipe(X_train, y_train, X_test, max_leaves, eta, nu, rng, args, verbose = True, center=True):
         """
         generates F_train and F_test and center them
         """
@@ -213,18 +208,20 @@ def isle_ensemble_pipe(X_train, y_train, X_test, max_leaves, eta, nu, rng, args)
                               param_file=args.param_file)
 
         start = time.time()
-        F_train, estimators = make_isle_ensemble(X_train, y_train, T_0, eta, nu, args.M, rng=rng)
+        F_train, estimators = make_isle_ensemble(X_train, y_train, T_0, eta, nu, args.M, 
+                                                 rng=rng, verbose=verbose)
         end_isle = time.time() - start
 
-        if args.verbose:
+        if verbose:
             print("Isle ensemble done: ", end_isle, " seconds")
 
         F_test = make_F_test(X_test, estimators)
 
-        # recenter
-        if args.verbose:
-            print("Re-standarize data for ISLE")
-        F_test, F_train = re_center_for_isle(F_test, F_train)
+        # # recenter
+        if center:
+            if verbose:
+                print("Re-standarize data for ISLE")
+            F_test, F_train = re_center_for_isle(F_test, F_train)
 
         return F_train, F_test, estimators
 
@@ -284,52 +281,159 @@ def get_new_path(estimators, path):
 
     return list(new_path)
 
-
-def create_param_grid(eta, nu, leaves, cv_sample = 100, rng = None):
+class ISLEPath:
     """
-    return an array with combinations of hyperparameters
-    for the ISLE ensemble. If cv_sample is lower than all possible
-    combinations of hyperparameters, a random sample of size cv_sample
-    is taken
     """
-    # eta = args.eta
-    # nu = args.nu
-    # leaves = args.max_leaf_nodes
-    # cv_sample = args.cv_sample
+    def __init__(self,
+                 # ISLE Ensemble params
+                 eta = 0.5,
+                 nu = 0.1,
+                 max_leaves = 2,
+                 M = 1000,
+                 max_features = None,
+                 max_depth = None,
+                 param_file = None,
+                 rng = None,
+                 make_ensemble = True,
+                 
+                 # Elastic Net params
+                 fit_intercept = True,
+                 max_iter = 1000,
+                 alpha = 0.5,
+                 lambdas = [0.1],
+                 tol = 0.0001,
+                 # other params
+                 verbose = True
+                 ):
+        
+        # ISLE ensemble params
+        self.eta = eta
+        self.nu = nu
+        self.max_leaves = max_leaves
+        self.M = M
+        self.max_features = max_features
+        self.max_depth = max_depth
+        self.param_file = param_file
+        self.rng = rng
+        self.make_ensemble = make_ensemble
 
-    param_size = len(eta) * len(nu) * len(leaves)
+        # Elastic Net params
+        self.fit_intercept = fit_intercept
+        self.max_iter = max_iter
+        # self.init_iter = init_iter
+        self.alpha = alpha
+        self.lambdas = lambdas
+        self.tol = tol
+
+        # other params
+        self.verbose = verbose
+
+        # internal variables
+        self.estimators = None
+        self.path = None
+        self.intercepts = None
+
+        self.mu = None
+        self.sigma = None
+
+    def set_params(self, **params):
+        """
+        Set parameters for the ISLEPath instance.
+        """
+        for key, value in params.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+            else:
+                raise ValueError(f"Parameter {key} is not recognized.")
+
+    def generate_ensemble(self, X, y):
+        base_tree = make_init_model(
+            max_leaves=self.max_leaves,
+            max_features=self.max_features,
+            max_depth=self.max_depth,
+            param_file=self.param_file
+        )
+
+        start = time.time()
+        T, self.estimators = make_isle_ensemble(X, y, base_tree, 
+                                                self.eta, self.nu, self.M, 
+                                                rng=self.rng, 
+                                                verbose=self.verbose)
+        end_isle = time.time() - start
+
+        if self.verbose:
+            print("Isle ensemble done: ", end_isle, " seconds")
+
+        return T
+
+    def elnet_pruning(self, T, y):
+
+        self.elnet = ElasticNet(fit_intercept = self.fit_intercept,
+                                max_iter = self.max_iter,
+                                init_iter = 1,
+                                copyX = True,
+                                alpha = self.alpha,
+                                tol = self.tol)
+
+        (self.path, 
+         self.intercepts) = lasso_path(T, y, self.lambdas, self.elnet,
+                                          print_progress = False)
+        # the effect of the intercept when (X,y) are centered
+        # is negligible.
+        # print("Intercepts: ", self.intercepts)
     
-    if param_size <= cv_sample:
-        grid = deque()
-        for nj in eta:
-            for vj in nu:
-                for lj in leaves:
-                    grid.append((nj, vj, lj))           
-        grid = np.array(grid)
-    else:
-        grid = np.zeros((cv_sample, 3))
-        grid[:,0] = rng.choice(eta, cv_sample)
-        grid[:,1] = rng.choice(nu, cv_sample)
-        # needs to be changed into integers
-        grid[:,2] = rng.choice(leaves, cv_sample)
+    def set_mu_sigma(self, T):
+        self.mu = np.mean(T, axis=0)
+        self.sigma = np.std(T, axis=0)
+        
+        sd_zero = self.sigma == 0
+        if np.any(sd_zero):
+            self.sigma[sd_zero] = 1
 
-    return grid
+    def fit(self, X, y):
 
-# from argparse import Namespace
-# args = Namespace()
+        if self.make_ensemble:
+            T = self.generate_ensemble(X, y)
+            
+            # centering T for Elastic Net
+            self.set_mu_sigma(T)
+            T = (T - self.mu)/self.sigma
+            # no need for centering in y.
+        else:
+            # if we are not making an ensemble,
+            # then T is just X
+            T = X
 
-# args.alpha = [1,2,3]
-# args.eta = [0.1,0.2,0.3]
-# args.nu = [0.4,0.5,0.6]
-# args.max_leaf_nodes = [2,3,4,5]
-# args.cv_sample = 100 # currently only randomize ISLE ensemble params only
-# # alpha of elastice net are untouched
-# rng = np.random.RandomState(12038)
+        # Lasso will re-center (X,y) and then 
+        # optimize for \beta. The \beta will account for the
+        # uncentered by getting \beta_0 and 
+        # \hat \beta = \beta/\sigma, where \sigma is the
+        # original variance. \sigma = ones if X is standarized.
 
+        # notice that if T and y are already centered,
+        # then the intercept (\beta_0) should be close to 0.
+        self.elnet_pruning(T, y)
 
+    def predict(self, X):
+        n,_ = X.shape
+        K = len(self.lambdas)
 
-# a = np.zeros((2,2))
-# def mysterious_fun(a):
-#     a[0,0] = 100
-#     return 1
-# b = mysterious_fun(a)
+        if self.make_ensemble:
+            assert self.estimators is not None, "Model fitting is necessary"
+            T_test = make_F_test(X, self.estimators)
+            T_test = (T_test - self.mu)/self.sigma
+
+        else:
+            # if we are not making an ensemble,
+            # then F_test is just X
+            T_test = X
+
+        y_pred = np.zeros((n,K))
+        for j in range(K):
+            y_pred[:,j] = self.intercepts[j] + T_test @ self.path[:, j]
+        
+        return y_pred
+
+    def score(self, X, y):
+        y_pred = self.predict(X)
+        return np.sqrt(np.mean((y_pred - y.reshape(-1,1))**2, axis=0))
