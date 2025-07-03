@@ -1,42 +1,43 @@
-
-import random
 import numpy as np
 import multiprocessing as mp
+from collections import deque
 
-from qsin.utils import calculate_test_errors
-# from qsin.sparse_solutions import ElasticNet, lasso_path
-from qsin.sparse_solutions_hd import ElasticNet, lasso_path
+from qsin.isle_path import ISLEPath
 
-def error_fn(tmp_alpha,
-             args = None, i = None, 
+def error_fn(theta_j,
+             base_model = None, i = None, 
              X_train_t = None, X_test_t = None, 
              y_train_t = None, y_test_t = None,
-             params = None):
-    # tmp_alpha = alphas[1]
-
-    if args.verbose:
-        print("Fold: ", i, " alpha: ", tmp_alpha)
-
-    model = ElasticNet(fit_intercept = True,
-                       max_iter = args.max_iter,
-                       init_iter = 1,
-                       copyX = True,
-                       alpha = tmp_alpha,
-                       tol = args.tol,
-                       seed = args.seed)
+             verbose = False, seed = None):
     
-    path = lasso_path(X_train_t, y_train_t, 
-                      params, model, print_progress = False)
-    
-    tmp_errors = calculate_test_errors(args, path, params,
-                                       X_test_t, y_test_t,
-                                       write = False)
+    rng = np.random.RandomState(seed)
+
+    if isinstance(theta_j, list):
+        # this means that the set of params 
+        # comes from isle and with param_size > 1.
+        nj, vj, lj, tmp_alpha = theta_j
         
-    # import matplotlib.pyplot as plt
-    # plt.plot(tmp_errors[:,0], tmp_errors[:,1])
-    # plt.xscale('log')
+        if verbose:
+            print("Fold: ", i, " alpha: ", tmp_alpha, " eta: ", 
+                  nj, " nu: ", vj, " leaves: ", lj, " seed: ", seed)
+    else:
+        (nj, vj, lj) = (None, None, None)
+        tmp_alpha = theta_j
 
-    return (tmp_errors[:, 1], tmp_alpha)
+        if verbose:
+            print("Fold: ", i, " alpha: ", tmp_alpha, " seed: ", seed)
+
+    base_model.set_params(
+        eta = nj,
+        nu = vj,
+        max_leaves = lj,
+        alpha = tmp_alpha,
+        rng = rng
+    )
+    base_model.fit(X_train_t, y_train_t)
+    tmp_errors = base_model.score(X_test_t, y_test_t)
+    # print(tmp_errors)
+    return (tmp_errors, theta_j)
 
 def get_parallel_errors(args, X_train, y_train, alphas, params, num_folds, ncores):
     """
@@ -62,23 +63,45 @@ def get_parallel_errors(args, X_train, y_train, alphas, params, num_folds, ncore
     # X = X_train
     # y = y_train
     # num_folds = 5
+    base_model = ISLEPath(
+            # elastic net parameters
+            fit_intercept = True,
+            max_iter = args.max_iter,
+            lambdas=params['lam'],
+            tol = args.tol,
+            # tree parameters
+            M = args.M,
+            max_features = args.max_features,
+            max_depth = args.max_depth,
+            param_file = args.param_file,
+            make_ensemble = args.isle,
+            verbose = False,
+        )
 
     n = X_train.shape[0]
     fold_size = n // num_folds
 
+    rng = np.random.RandomState(args.seed)
     #shuffle the data
-    random.seed(args.seed)
     all_index = list(range(n))
-    random.shuffle(all_index)
+    rng.shuffle(all_index)
 
     X_train = X_train[all_index, :] # check to shuffle X
     y_train = y_train[all_index] # check to shuffle y!
 
+    # if isle and param_size > 1, then modify alphas
+    # otherwise, let as it is.
+    full_grid = create_full_grid(isle=args.isle, eta=args.eta, nu=args.nu,
+                                  leaves=args.max_leaf_nodes, alphas=alphas, 
+                                  cv_sample=args.cv_sample, rng=rng)
+    
+    if args.verbose:
+        print("Hyperparameter grid size: ", len(full_grid))
 
-    out = []
+    out = deque([])
     with mp.Pool( processes = ncores ) as pool:
 
-        preout = []
+        preout = deque([])
         for i in range(num_folds):
 
             test_idx = list(range(i * fold_size, (i + 1) * fold_size))
@@ -87,50 +110,64 @@ def get_parallel_errors(args, X_train, y_train, alphas, params, num_folds, ncore
             X_train_t, X_test_t = X_train[train_idx, :], X_train[test_idx, :]
             y_train_t, y_test_t = y_train[train_idx], y_train[test_idx]
 
-            for al in alphas:
+            for theta_j in full_grid:
+                tmp_seed = rng.randint(0, 2**31 - 1)
 
                 errors = pool.apply_async(
                     error_fn, 
-                    (al, args, i, 
+                    (theta_j, base_model, i, 
                      X_train_t, X_test_t, 
                      y_train_t, y_test_t, 
-                     params)
+                     args.verbose, tmp_seed)
                 )
                 preout.append(errors)
 
         for errors in preout:
             out.append(errors.get())
 
-    # from matplotlib import pyplot as plt
-    # for i in range(len(out)):
-    #     # i = 0
-    #     plt.plot(params['lam'], out[i][0])
-    #     plt.xscale('log')
+    return list(out)
 
-    return out
 
-def get_best_params(all_errors, alphas, params):
+def get_best_params(all_errors, params, folds = 5):
     # all_errors = out
+    """
+    Fold_alpha has the following structure:
+    [  theta_{1,j}, ..., theta_{f,j}  ] 
 
-    fold_alpha = np.array([b for _,b in all_errors])
-    fold_error = np.array([a for a,_ in all_errors])
+    Fold error has the following structure:
+    [ [ RMSE_1,j \in R^{1 x K} ]   -> theta_{1,j}
+       ...
+      [ RMSE_f,j \in R^{1 x K} ] ]  -> theta_{f,j}
 
-    best_alpha = 0
+    where f is the fold index and j is the hyperparameter index.
+    """
+    # getting row-wise average of the errors
+    dict_errs = {}
+    for (e_fj, theta_j) in all_errors:
+        if isinstance(theta_j, list):
+            # make it hashable if it is a list
+            theta_j = tuple(theta_j)  
+
+        if theta_j not in dict_errs:
+            dict_errs[theta_j] = e_fj/folds
+
+        else:
+            dict_errs[theta_j] += e_fj/folds
+
+    best_theta_j = 0
     best_lam = 0
     min_rmse = np.inf
 
-    for al in alphas:
-        # al
-        idx = np.where(fold_alpha == al)[0]
-        CV_error =  np.mean(fold_error[idx,:], 0)
-        tmp_cv_err = np.min(CV_error)
+    for theta_j, ave_e_j in dict_errs.items():
+        tmp_cv_err = np.min(ave_e_j)
+
         if tmp_cv_err < min_rmse:
             min_rmse = tmp_cv_err
-            best_alpha = al
-            best_lam = params['lam'][np.argmin(CV_error)]
-            # print(best_alpha, best_lam, min_rmse)
+            best_theta_j = theta_j
+            best_lam = params['lam'][np.argmin(ave_e_j)]
+            # print(best_theta_j, best_lam, min_rmse)
 
-    return best_alpha, best_lam, min_rmse
+    return best_theta_j, best_lam, min_rmse
 
 def ElasticNetCV_alpha(args, X_train, y_train, alphas, 
                  params, folds, ncores):
@@ -153,84 +190,79 @@ def ElasticNetCV_alpha(args, X_train, y_train, alphas,
         params, folds, ncores
     )
 
-    (best_alpha, 
+    (best_theta_j,
      best_lam,
-     min_rmse) = get_best_params(all_errors, alphas, params)
+     min_rmse) = get_best_params(all_errors, params, folds=folds)
+    
 
     if args.verbose:
-        print("CV best alpha: ", best_alpha)
+        if isinstance(best_theta_j, tuple):
+            print("CV best (eta, nu, leaves, alpha): ", best_theta_j)
+        else:
+            print("CV best alpha: ", best_theta_j)
+
         print("CV best lambda: ", best_lam)
         print("CV min RMSE: ", min_rmse)
 
-    return best_alpha
-
-# alphas = [ 0.5, 0.9 ]
-# folds = 2
-# ncores = 6
-# args.verbose = True
-# ElasticNetCV_alpha(args, X_train, y_train, [0.5, 0.9], params, 2, 6)
+    return best_theta_j
 
 
+def create_tree_param_grid(eta, nu, leaves, cv_sample = 100, rng = None):
+    """
+    return an array with combinations of hyperparameters
+    for the ISLE ensemble. If cv_sample is lower than all possible
+    combinations of hyperparameters, a random sample of size cv_sample
+    is taken
+    """
+    # eta = args.eta
+    # nu = args.nu
+    # leaves = args.max_leaf_nodes
+    # cv_sample = args.cv_sample
 
+    param_size = len(eta) * len(nu) * len(leaves)
+    
+    if param_size <= cv_sample:
+        grid = deque()
+        for nj in eta:
+            for vj in nu:
+                for lj in leaves:
+                    grid.append((nj, vj, lj))           
+        grid = np.array(grid)
+    else:
+        grid = np.zeros((cv_sample, 3))
+        grid[:,0] = rng.choice(eta, cv_sample)
+        grid[:,1] = rng.choice(nu, cv_sample)
+        # needs to be changed into integers
+        grid[:,2] = rng.choice(leaves, cv_sample)
 
-# move all this below upwards to test the function
-# """
-# sim_nets.R 15 --max_iter 500 --prefix test --out_path ./test_data/test_sims --ncores 5
-# # 10 min
-# infer_qlls.jl ./test_data/1_seqgen.CFs_n15.csv\
-#               ./test_data/test_sims/test*.txt\
-#               --outfile ./test_data/test_qll.csv\
-#               --ncores 5 
-# """
-# from phylokrr.utils import k_folds
+    return grid
 
-# import numpy as np
-# import random
+def search_tree_hyper(isle, eta, nu, leaves):
 
-# from sparse_solutions import ElasticNet, lasso_path
-# from utils import max_lambda, _scaler, calculate_test_errors
-# from isle_path import split_data_isle, get_new_path
-# from path_subsampling import calculate_test_errors
+    if not isle:
+        return False
 
-# from argparse import Namespace
-# # print(args)
-# Xy_file = "/Users/ulises/Desktop/ABL/software/qsin/test_data/test_qll.csv"
-# args = {'p_test': 0.2, 'seed': 0, 
-#         'isle': False, 'nwerror': False,
-#         'max_features': 0.5, 'max_depth': 5, 
-#         'param_file': None, 'eta': 0.1, 
-#         'nu': 0.1, 'M': 100, 'verbose': False, 
-#         'alpha': 0.5, 'e': 0.01, 'K': 100, 
-#         'max_iter': 1000, 'tol': 1e-06, 
-#         'wpath': False, 'prefix': 'test', 
-#         'CT_file': '../test_data/1_seqgen.CFs_n15.csv', 
-#         'factor': 0.5, 'inbetween': 0.5, 'window': 1, 
-#         'nstdy': False,}
-# args = Namespace(**args)
-# args.Xy_file = Xy_file
+    param_size = len(eta) * len(nu) * len(leaves)
 
+    if isle and param_size == 1:
+        return False
+    else:
+        return True
 
+def create_full_grid(isle, eta, nu, leaves, alphas, cv_sample, rng):
+    # alphas = [1,2,3]
+    # look for tree_hyperparameters?
+    search_treep = search_tree_hyper(isle, eta, nu, leaves)
 
+    if not search_treep:
+        return alphas
+    
+    grid = create_tree_param_grid(eta, nu, leaves, cv_sample, rng)
+    
+    out_grid  = deque([])
+    for alpha_j in alphas:
+        for tree_parms_j in grid:
+            nj, vj, lj = list(tree_parms_j)
+            out_grid.append( [nj, vj, int(lj), alpha_j])
 
-# data = np.loadtxt(args.Xy_file, delimiter=',', skiprows=1)
-# X, y = data[:, :-1], data[:, -1]
-# n,p = X.shape
-
-# X = _scaler(X, X, sted = True)
-# y = _scaler(y, y, sted = False if args.nstdy else True)
-
-# num_test = int(n*args.p_test)
-
-# (X_train,X_test,
-#     y_train,y_test,
-#     estimators # None if isle is False
-#     ) = split_data_isle(X, y,
-#         num_test=num_test, seed=args.seed,
-#         isle=args.isle, nwerror=args.nwerror, 
-#         mx_p=args.max_features, max_depth=args.max_depth, param_file=args.param_file, 
-#         eta=args.eta, nu=args.nu, M=args.M,
-#         verbose=args.verbose)
-
-# max_lam = max_lambda(X_train, y_train, alpha=args.alpha)
-# min_lam = max_lam * args.e
-# params = {'lam': np.logspace(np.log10(min_lam), np.log10(max_lam), args.K, endpoint=True)[::-1]}
+    return out_grid
