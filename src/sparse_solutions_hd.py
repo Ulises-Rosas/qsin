@@ -13,7 +13,8 @@ from qsin.CD_dual_gap import (epoch_lasso_v2, update_beta_lasso_v2, dualpa,
 class Lasso:
     """
     lasso model.
-    It assumes that the input data has been standardized
+    It assumes that the input data has been standardized. 
+    If not, lasso does it nonetheless on (X,y)
 
     init beta is a zero vector
     """
@@ -585,30 +586,28 @@ def k_fold_cv_random(X, y,
 
     return best_[0]
 
-def lasso_path(X_train, y_train, params, model, print_progress = True):
+def lasso_path(X_train, y_train, lams, model, print_progress = True):
     """
     compute the lasso path based on the training set
     and  with errors based on the test set
-    """
-    # model = Lasso()
-    # X = X_train
-    # y = y_train
-    # params = {'lam': np.logspace(-2, max_lambda(X,y, alpha), 3)}
 
-    # if X_test is None and y_test is None:
-    #     X_test = X_train
-    #     y_test = y_train
+    it also returns the intercepts
+    for each lambda value in the path
+    so that the model can be used for prediction
+    with the intercepts
+    """
 
     _,p = X_train.shape
-    lams = params['lam']
+    K  = len(lams)
 
-    # errors = np.zeros(len(lams))
-    path = np.ones((p, len(params['lam'])))
+    path = np.ones((p, K))
+    intercepts = np.zeros(K)
 
     model.set_params(lam=lams[0])
     model.fit(X_train, y_train)
 
     path[:,0] = model.beta
+    intercepts[0] = model.intercept
 
     if print_progress:
         index_set = progressbar(range(1, len(lams)), "Computing lasso path: ", 40)
@@ -617,7 +616,6 @@ def lasso_path(X_train, y_train, params, model, print_progress = True):
         index_set = range(1, len(lams))
     
     for i in index_set:
-    # for i in range(1, len(lams)):
 
         model.set_params(lam = lams[i],
                           warm_start = True, 
@@ -625,9 +623,11 @@ def lasso_path(X_train, y_train, params, model, print_progress = True):
                           )
             
         model.fit(X_train, y_train)
-        path[:,i] = model.beta
 
-    return path
+        path[:,i] = model.beta
+        intercepts[i] = model.intercept
+
+    return path, intercepts
 
 def split_data(X,y,num_test, seed = 123):
 
