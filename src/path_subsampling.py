@@ -3,14 +3,13 @@
 import time
 import argparse
 
-
 import numpy as np
-# from qsin.sparse_solutions import ElasticNet, lasso_path
-from qsin.sparse_solutions_hd import ElasticNet, lasso_path
-from qsin.utils import  calculate_test_errors, max_lambda
-from qsin.isle_path import split_data_isle, get_new_path
-from qsin.ElasticNetCV import ElasticNetCV_alpha
+
+from qsin.isle_path import get_new_path, ISLEPath
+from qsin.ElasticNetCV import create_full_grid, ISLEPathCV
 from qsin.row_selection import row_selection, write_rows
+from qsin.utils import (standardize_Xy, write_test_errors, 
+                        split_data, get_lambdas, get_alpha_max_lam)
 
 def max_features_type(value):
     try:
@@ -45,8 +44,10 @@ def main():
     isle_args.add_argument("--eta", type=float, nargs='+', default=[0.5], metavar="", help="Proportion of observations to use in each tree.")
     isle_args.add_argument("--nu", type=float, nargs='+', default=[0.1], metavar="", help="Learning rate.")
     isle_args.add_argument("--max_leaf_nodes", type=int, nargs='+' , default=[6], metavar="", help="Maximum number of leaf nodes in the decision tree.")
+    isle_args.add_argument("--cv_sample", type=int, default=100, metavar="", help="Number of randomly choose ISLE hyperparameter combinations")
     isle_args.add_argument("--max_depth", type=int, default=5, metavar="", help="Maximum depth of the decision tree.")
     isle_args.add_argument("--M", type=int, default=500, metavar="", help="Number of trees in the ensemble.")
+
     # default according Hastie et al. 2009, pp. 592
     isle_args.add_argument("--max_features", type=max_features_type, default=0.3, metavar="", help="Maximum proportion of features it is considered to grow nodes in a regression tree. It can also be 'sqrt' or 'log2'.")
     isle_args.add_argument("--param_file", type=str, default=None, metavar="", help="""JSON file with parameters for the decision tree
@@ -97,90 +98,95 @@ def main():
     data = np.loadtxt(args.Xy_file, delimiter=',', skiprows=1)
     X, y = data[:, :-1], data[:, -1]
     n,p = X.shape # p (\approx T^4) used for row selection only
+    rng = np.random.RandomState(args.seed)
 
 
     num_test = int(n*args.p_test)
     start = time.time()
-    # O(nT^4) for centering or O(M T^4 nlog(n)) for ISLE
-    (X_train,X_test,
-     y_train,y_test,
-     estimators # None if isle is False
-     ) = split_data_isle(X, y,
-            num_test=num_test, seed=args.seed,
-            isle=args.isle, max_leaves=args.max_leaf_nodes, eta=args.eta, nu=args.nu,
-            nstdy = args.nstdy, args=args)
+    # O(M T^4 nlog(n)) for ISLE ensemble
 
-    all_max_lams = [max_lambda(X_train, y_train, alpha=a) for a in args.alpha]
-    if args.verbose:
-        print("Max lambda(s): ", all_max_lams)
+    # O(nT^4) for centering
+    X_train, X_test, y_train, y_test = split_data(X, y, num_test=num_test, seed=args.seed)
+
+    # improve stability of the algorithm
+    X_train, X_test, y_train, y_test = standardize_Xy(X_train, y_train, X_test, y_test, args.nstdy)
+
+    base_model = ISLEPath(
+            # elastic net parameters
+            fit_intercept = True,
+            max_iter = args.max_iter,
+            tol = args.tol,
+            # tree parameters
+            M = args.M,
+            max_features = args.max_features,
+            max_depth = args.max_depth,
+            param_file = args.param_file,
+            make_ensemble = args.isle,
+            verbose = False,
+        )
     
-    max_lam = np.max(all_max_lams)
-    min_lam = max_lam * args.e
-    params = {'lam': np.logspace(np.log10(min_lam), np.log10(max_lam), args.K, endpoint=True)[::-1]}
+    alpha_max_lam = get_alpha_max_lam(X_train, y_train, args.alpha)
+    lambdas = get_lambdas(alpha_max_lam, X_train, y_train, args.K, args.e, verbose=args.verbose)
 
-    assert all([a > 0 and a <= 1 for a in args.alpha]), "Alpha values must be between 0 and 1."
-    if len(args.alpha) > 1:
-        assert args.cv, "If alpha is a list, then --cv should be used."
+    base_model.set_params(lambdas = lambdas)
 
-        # do cross-validation
-        args.alpha = ElasticNetCV_alpha(args, X_train, y_train,
-                                        args.alpha, params,
-                                        args.folds, args.ncores)
-        
-        max_lam = max_lambda(X_train, y_train, alpha=args.alpha)
-        min_lam = max_lam * args.e
+    full_grid = create_full_grid(isle=args.isle, eta=args.eta, nu=args.nu,
+                                  leaves=args.max_leaf_nodes, alphas=args.alpha, 
+                                  cv_sample=args.cv_sample, rng=rng)
 
-        if args.verbose:
-            print("Lambda range: ", min_lam, max_lam)
+    (nj, vj, lj, alpha) = ISLEPathCV(base_model, X_train, y_train, full_grid, lambdas, 
+                                     args.folds, args.ncores, verbose = args.verbose, rng=rng)    
 
-        params = {'lam': np.logspace(np.log10(min_lam), np.log10(max_lam), args.K, endpoint=True)[::-1]}
+    if alpha != alpha_max_lam:
+        lambdas = get_lambdas(alpha, X_train, y_train, args.K, args.e, verbose=args.verbose)
+        base_model.set_params(lambdas = lambdas)
 
-    else:
-        assert not args.cv, "If alpha is a single value, then --cv should not be used."
-        args.alpha = args.alpha[0]
+    # rng = np.random.RandomState(args.seed) # there is an effect of the seed on the path
+    base_model.set_params(eta=nj, nu=vj, max_leaves=lj, alpha=alpha, 
+                          verbose=args.verbose, rng=rng)
 
     # O(npk) = O(nT^4) for fixed k 
     # or O(nM) if isle is True
-    model = ElasticNet(fit_intercept=True, 
-                        max_iter=args.max_iter,
-                        init_iter=1, 
-                        copyX=True, 
-                        alpha=args.alpha, 
-                        tol=args.tol, seed = args.seed)
-
-    # O(npk) = O(nT^4) for fixed k
-    # or O(Mk) if isle is True
-    path = lasso_path(X_train, y_train, params, model)
+    base_model.fit(X_train, y_train)
     end_lasso = time.time() - start
+    
+    path = base_model.path
 
     if args.verbose:
-        print("Elastic net path done: ", end_lasso, " seconds")
+        print("ISLE path done: ", end_lasso, " seconds")
 
 
     if args.wpath:
         # the first column is the lambda values
         # which adds one extra column into the path
-        lam_path = np.concatenate((params['lam'].reshape(-1, 1), path.T), axis=1)
+        lam_path = np.concatenate((lambdas.reshape(-1, 1), path.T), axis=1)
         np.savetxt(args.prefix + "_elnetPath.csv", 
                    lam_path, 
                    delimiter=',',
                    comments='')
     # O(n)
-    test_errors = calculate_test_errors(args, path, params, X_test, y_test, write=True)
+    # write the test errors as well.
+    test_rmse = base_model.score(X_test, y_test)
+    if args.verbose:
+        print("Min test RMSE: ", np.min(test_rmse))
+
+
+    # test errors contain the first column with lambda values
+    # and the second column with RMSE values.
+    # this is compatible with the row selection. 
+    # TODO: streamline from test_rmse
+    test_errors = write_test_errors(args.prefix, test_rmse, lambdas)
 
     if args.isle:
         picked_file = args.prefix + "_overlappedBatches_isle.txt"
-        # batch_file = args.prefix + "_disjointBatches_isle.txt"
         
         # transform the path
         # O(kp) = O(kT^4) = O(T^4) for fixed k
         # it returns a list of sets
-        path = get_new_path(estimators, path) 
+        path = get_new_path(base_model.estimators, path) 
         
     else:
         picked_file = args.prefix + "_overlappedBatches.txt"
-        # batch_file = args.prefix + "_disjointBatches.txt"
-
 
     # overlapping batches
     # O(\rho T^4) for isle. If check_spps is True, it is O(T^4)
