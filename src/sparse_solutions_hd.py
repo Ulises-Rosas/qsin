@@ -1,6 +1,5 @@
 # high-dimensional sparse solutions
 
-import random
 from collections import deque
 
 
@@ -628,19 +627,6 @@ def lasso_path(X_train, y_train, lams, model, print_progress = True):
         intercepts[i] = model.intercept
 
     return path, intercepts
-
-def split_data(X,y,num_test, seed = 123):
-
-    random.seed(seed)
-    n,_ = X.shape
-
-    test_idx  = random.sample(range(n), k = num_test)
-    train_idx = list( set(range(n)) - set(test_idx) )
-
-    X_train, X_test = X[train_idx,:], X[test_idx,:]
-    y_train, y_test = y[train_idx]  , y[test_idx]
-
-    return X_train, X_test, y_train, y_test
     
 def get_non_zero_coeffs(path, ZO, thresh = 0.5):
     n_features = path.shape[0]

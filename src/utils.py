@@ -1,5 +1,6 @@
 import sys
 import time
+import random
 
 import numpy as np
 
@@ -16,41 +17,62 @@ def max_lambda(X, y, alpha = None):
     return c1 * np.max( np.abs( np.matmul(X.T, y) ) )
 
 
-def _scaler(ref, dat, sted = True):
-    u = np.mean(ref, axis=0)
+def get_lambdas(alpha, X_train, y_train, K, epsilon, verbose=False):
+
+    # max_lambda = O(nT^4) operations, under the budget of
+    # simulations, or ISLE ensemble, it is negligible
+    max_lam = max_lambda(X_train, y_train, alpha=alpha)
+    min_lam = max_lam * epsilon
+
+    if verbose:
+        print("Lambda range: ", min_lam, max_lam)
+
+    lambdas =  np.logspace(np.log10(min_lam), np.log10(max_lam), K, endpoint=True)[::-1]
+    return lambdas
+
+def get_alpha_max_lam(X_train, y_train, alphas):
     
-    cred = dat - u
+    all_max_lams = -np.inf
+    all_max_lams_alpha_indx = -1
+    for i,a in enumerate(alphas):
+        tmp_a = max_lambda(X_train, y_train, alpha=a)
+        if tmp_a > all_max_lams:
+            all_max_lams = tmp_a
+            all_max_lams_alpha_indx = i
+            
+    return alphas[all_max_lams_alpha_indx]
 
-    if sted:
-        sd = np.std(ref, axis=0)
-        cred = cred / sd
-
-    return cred
 
 def rmse(y, X, B):
     return np.sqrt( np.mean( ( y - X.dot(B) )**2 ) )
 
+def split_data(X,y,num_test, seed = 123):
 
-def calculate_test_errors(args, path, params, X_test, y_test, write = True):
+    random.seed(seed)
+    n,_ = X.shape
+
+    test_idx  = random.sample(range(n), k = num_test)
+    train_idx = list( set(range(n)) - set(test_idx) )
+
+    X_train, X_test = X[train_idx,:], X[test_idx,:]
+    y_train, y_test = y[train_idx]  , y[test_idx]
+
+    return X_train, X_test, y_train, y_test
+
+def write_test_errors(prefix, errors, lambdas):
     """
     Calculate the test errors for each lambda value in the path
 
     Parameters
     ----------
-    args : argparse.Namespace
-        Arguments from the command line
+    prefix : str
+        The prefix for the output file
 
-    path : numpy.ndarray
-        The path of coefficients
+    errors : list
+        The list of RMSE values for each lambda
 
-    params : dict
-        Parameters for the path
-
-    X_test : numpy.ndarray
-        The test data
-
-    y_test : numpy.ndarray
-        The test response
+    lambdas : list
+        The list of lambda values
 
     Returns
     -------
@@ -60,17 +82,14 @@ def calculate_test_errors(args, path, params, X_test, y_test, write = True):
         the RMSE value
 
     """
-    test_errors = np.zeros((path.shape[1], 2))
-    for j in range(path.shape[1]):
-        beta_j = path[:, j]
-        rmse_j = rmse(y_test, X_test, beta_j)
-        test_errors[j, :] = [params['lam'][j], rmse_j]
+    test_errors = np.zeros((len(errors), 2))
+    for j, rmse_j in enumerate(errors):
+        test_errors[j, :] = [lambdas[j], rmse_j]
 
-    if write:
-        np.savetxt(args.prefix + "_testErrors.csv",
-                    test_errors,
-                    delimiter=',',
-                    comments='')
+    np.savetxt(prefix + "_testErrors.csv",
+                test_errors,
+                delimiter=',',
+                comments='')
 
     return test_errors
 
