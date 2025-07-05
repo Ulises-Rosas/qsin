@@ -6,7 +6,7 @@ import argparse
 import numpy as np
 
 from qsin.isle_path import get_new_path, ISLEPath
-from qsin.ElasticNetCV import create_full_grid, ISLEPathCV
+from qsin.ISLEPathCV import create_full_grid, ISLEPathCV
 from qsin.row_selection import row_selection, write_rows
 from qsin.utils import (standardize_Xy, write_test_errors, 
                         split_data, get_lambdas, get_alpha_max_lam)
