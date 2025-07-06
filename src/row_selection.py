@@ -17,22 +17,48 @@ def conv_errs(test_errors, tol = 1e-4):
 
     return opt_j
 
-def data_driven_lambda_k(test_errors, verbose = False, tol = 1e-4):
+def constraint_test_error(test_errors, path):
+    start_j = 0
+    for j in range(len(test_errors)):
+        sel = get_modelselection(path, j)
+        if sel:
+            start_j = j
+            break
 
-    min_err_j  = np.argmin(test_errors)          #O(k) = O(1) for fixed k
-    conv_err_j = conv_errs(test_errors, tol=tol) #O(k) = O(1) for fixed k
+    return test_errors[start_j:], start_j
+
+
+def data_driven_lambda_k(test_errors, path, verbose = False, tol = 1e-4):
+    """
+    Choose the best j based on the test errors
+
+    it  constraints the test errors to the first non-zero selection
+    imagine path has the following set of non-zero selections:
+    idx: 0    1   2  |  3    4  ...
+        [ 0,  0,  0, | x1,  x2, ...] -> path_nz
+        [e1, e2, e3, | e4, e_m, ...] -> test_errors
+
+    then the start_j = 3. The opt_j =  start_j + opt_j_c.
+
+    if the opt_j_c is at e_m, then opt_j_c = 1 and opt_j = 3 + 1 = 4
+    """
+    # make sure the opt_j is not an empty selection
+    test_errors_c, start_j = constraint_test_error(test_errors, path)
+
+    min_err_j = np.argmin(test_errors_c) #O(k) = O(1) for fixed k
+    conv_err_j = conv_errs(test_errors_c, tol=tol) #O(k) = O(1) for fixed k
 
     if conv_err_j < min_err_j:
         if verbose:
             print("lambda_k choosen by test error convergence")
 
-        opt_j = conv_err_j
+        opt_j_c = conv_err_j
     else:
         if verbose:
             print("lambda_k choosen by minimum test error")
-        opt_j = min_err_j
+        opt_j_c = min_err_j
 
-    return opt_j
+    return opt_j_c + start_j
 
 def get_modelselection(path, j):
     """
@@ -91,7 +117,7 @@ def choose_j(path, test_errors = None, factor = -1, verbose = False, tol = 1e-4,
         # check 'calculate_test_errors' function
         
         # O(np) for obtain test_errors
-        return data_driven_lambda_k(test_errors[:,1], verbose, tol) # O(k) = O(1) for fixed k
+        return data_driven_lambda_k(test_errors[:,1], path, verbose, tol) # O(k) = O(1) for fixed k
         # return np.argmin(test_errors[:,1]) # O(k) = O(1) for fixed k
     
     else:
