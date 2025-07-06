@@ -153,7 +153,7 @@ def ISLEPathCV(base_model, X_train, y_train, full_grid,
     """
 
     if len(full_grid) == 1:
-        return full_grid
+        return full_grid[0]
 
     if verbose:
         print("Hyperparameter grid size: ", len(full_grid))
