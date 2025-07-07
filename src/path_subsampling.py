@@ -9,7 +9,7 @@ from qsin.isle_path import get_new_path, ISLEPath
 from qsin.ISLEPathCV import create_full_grid, ISLEPathCV
 from qsin.row_selection import row_selection, write_rows
 from qsin.utils import (standardize_Xy, write_test_errors, 
-                        split_data, get_lambdas, get_alpha_max_lam)
+                        split_data, get_lambdas)
 
 def max_features_type(value):
     try:
@@ -125,21 +125,17 @@ def main():
             verbose = False,
         )
     
-    alpha_max_lam = get_alpha_max_lam(X_train, y_train, args.alpha)
-    lambdas = get_lambdas(alpha_max_lam, X_train, y_train, args.K, args.e, verbose=args.verbose)
-
-    base_model.set_params(lambdas = lambdas)
-
     full_grid = create_full_grid(isle=args.isle, eta=args.eta, nu=args.nu,
                                   leaves=args.max_leaf_nodes, alphas=args.alpha, 
                                   cv_sample=args.cv_sample, rng=rng)
 
-    (nj, vj, lj, alpha) = ISLEPathCV(base_model, X_train, y_train, full_grid, lambdas, 
-                                     args.folds, args.ncores, verbose = args.verbose, rng=rng)    
 
-    if alpha != alpha_max_lam:
-        lambdas = get_lambdas(alpha, X_train, y_train, args.K, args.e, verbose=args.verbose)
-        base_model.set_params(lambdas = lambdas)
+    (nj, vj, lj, alpha) = ISLEPathCV(base_model, X_train, y_train, full_grid,
+                                     args.folds, args.ncores, K=args.K, epsilon=args.e, 
+                                     verbose = args.verbose, rng=rng)    
+
+    lambdas = get_lambdas(alpha, X_train, y_train, args.K, args.e, verbose=args.verbose)
+    base_model.set_params(lambdas = lambdas)
 
     # rng = np.random.RandomState(args.seed) # there is an effect of the seed on the path
     base_model.set_params(eta=nj, nu=vj, max_leaves=lj, alpha=alpha, 
@@ -168,7 +164,8 @@ def main():
     # write the test errors as well.
     test_rmse = base_model.score(X_test, y_test)
     if args.verbose:
-        print("Min test RMSE: ", np.min(test_rmse))
+        print("Min test RMSE: ", np.min(test_rmse), "at lambda: ",
+              lambdas[np.argmin(test_rmse)])
 
 
     # test errors contain the first column with lambda values

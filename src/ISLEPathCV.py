@@ -2,14 +2,19 @@ import numpy as np
 import multiprocessing as mp
 from collections import deque
 
+from qsin.utils import get_lambdas
+
 def error_fn(theta_j,
              base_model = None, i = None, 
              X_train_t = None, X_test_t = None, 
              y_train_t = None, y_test_t = None,
-             verbose = True, seed = None):
+             verbose = True, seed = None,
+             K = 100, epsilon = 1e-3):
     
     rng = np.random.RandomState(seed)
     nj, vj, lj, alpha = theta_j
+
+    lambdas = get_lambdas(alpha, X_train_t, y_train_t, K, epsilon, verbose=False)
     
     base_model.set_params(
         eta = nj,
@@ -17,7 +22,8 @@ def error_fn(theta_j,
         max_leaves = lj,
         alpha = alpha,
         rng = rng,
-        verbose = False
+        verbose = False,
+        lambdas = lambdas
     )
     base_model.fit(X_train_t, y_train_t)
     tmp_errors = base_model.score(X_test_t, y_test_t)
@@ -35,7 +41,8 @@ def error_fn(theta_j,
 
 
 def get_parallel_errors(base_model, X_train, y_train, full_grid, 
-                           rng, num_folds, ncores, verbose = False):
+                           rng, num_folds, ncores, K, epsilon, 
+                           verbose = False):
     """
     let X_t be a fold in the training set 
     and a_j be an alpha in alphas. Then 
@@ -82,16 +89,17 @@ def get_parallel_errors(base_model, X_train, y_train, full_grid,
 
             X_train_t, X_test_t = X_train[train_idx, :], X_train[test_idx, :]
             y_train_t, y_test_t = y_train[train_idx], y_train[test_idx]
+            # same fold should have same seed
+            tmp_seed = rng.randint(0, 2**31 - 1)
 
             for theta_j in full_grid:
-                tmp_seed = rng.randint(0, 2**31 - 1)
 
                 errors = pool.apply_async(
                     error_fn, 
                     (theta_j, base_model, i, 
                      X_train_t, X_test_t, 
                      y_train_t, y_test_t, 
-                     verbose, tmp_seed)
+                     verbose, tmp_seed, K, epsilon)
                 )
                 preout.append(errors)
 
@@ -100,7 +108,7 @@ def get_parallel_errors(base_model, X_train, y_train, full_grid,
 
     return list(out)
 
-def get_best_params(all_errors, lambdas, folds = 5):
+def get_best_params(all_errors, folds = 5):
     # all_errors = out
     """
     Fold_alpha has the following structure:
@@ -127,7 +135,6 @@ def get_best_params(all_errors, lambdas, folds = 5):
             dict_errs[theta_j] += e_fj/folds
 
     best_theta_j = 0
-    best_lam = 0
     min_rmse = np.inf
 
     for theta_j, ave_e_j in dict_errs.items():
@@ -136,13 +143,12 @@ def get_best_params(all_errors, lambdas, folds = 5):
         if tmp_cv_err < min_rmse:
             min_rmse = tmp_cv_err
             best_theta_j = theta_j
-            best_lam = lambdas[np.argmin(ave_e_j)]
             # print(best_theta_j, best_lam, min_rmse)
 
-    return best_theta_j, best_lam, min_rmse
+    return best_theta_j, min_rmse
 
-def ISLEPathCV(base_model, X_train, y_train, full_grid, 
-               lambdas, folds, ncores, verbose = True, rng = None):
+def ISLEPathCV(base_model, X_train, y_train, full_grid, folds, ncores, K = 100, epsilon = 1e-3,
+               verbose = True, rng = None):
     """
     Find the best set of hyperparameters for the ISLEPath
     using a cross-validation. The function returns
@@ -161,16 +167,14 @@ def ISLEPathCV(base_model, X_train, y_train, full_grid,
         
     all_errors = get_parallel_errors(
         base_model, X_train, y_train, full_grid,
-        rng, folds, ncores, verbose
+        rng, folds, ncores, K, epsilon, verbose
     )
 
     (best_theta_j,
-     best_lam,
-     min_rmse) = get_best_params(all_errors, lambdas, folds=folds)
+     min_rmse) = get_best_params(all_errors, folds=folds)
     
     if verbose:
         print("CV best (eta, nu, leaves, alpha): ", best_theta_j)
-        print("CV best lambda: ", best_lam)
         print("CV min average RMSE: ", min_rmse)
 
     return best_theta_j
