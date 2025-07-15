@@ -28,7 +28,7 @@ def constraint_test_error(test_errors, path):
     return test_errors[start_j:], start_j
 
 
-def data_driven_lambda_k(test_errors, path, verbose = False, tol = 1e-4):
+def data_driven_lambda_k(test_errors, path, verbose = False, tol = 1e-4, ignore_conv = False):
     """
     Choose the best j based on the test errors
 
@@ -41,6 +41,33 @@ def data_driven_lambda_k(test_errors, path, verbose = False, tol = 1e-4):
     then the start_j = 3. The opt_j =  start_j + opt_j_c.
 
     if the opt_j_c is at e_m, then opt_j_c = 1 and opt_j = 3 + 1 = 4
+
+
+    Parameters
+    ----------
+    test_errors : numpy.ndarray
+        The test errors with shape (k,2)
+        where the first column is the lambda values and the second column is the RMSE values
+    path : numpy.ndarray
+        The path of coefficients with shape (p,k) or (M,k) if it is from ISLE
+        where p is the number of features and k is the number of lambda values
+    verbose : bool, optional
+        If True, the function will print the chosen j
+        The default is False.
+    tol : float, optional
+        The tolerance for the convergence of the test errors
+        The default is 1e-4.
+    ignore_conv : bool, optional
+        If True, the function will ignore the convergence of the test errors
+        The default is False.
+    Returns
+    -------
+    int
+        The index of the best j
+        This is the index of the lambda value that minimizes the test error
+        or the index of the lambda value that converges to the test error
+        depending on the convergence of the test errors.
+        If the convergence is ignored, then it returns the index of the minimum test error.
     """
     # make sure the opt_j is not an empty selection
     test_errors_c, start_j = constraint_test_error(test_errors, path)
@@ -48,14 +75,14 @@ def data_driven_lambda_k(test_errors, path, verbose = False, tol = 1e-4):
     min_err_j = np.argmin(test_errors_c) #O(k) = O(1) for fixed k
     conv_err_j = conv_errs(test_errors_c, tol=tol) #O(k) = O(1) for fixed k
 
-    if conv_err_j < min_err_j:
+    if conv_err_j < min_err_j and not ignore_conv:
         if verbose:
-            print("lambda_k choosen by test error convergence")
+            print("lambda_k choosen by test error convergence", end= "")
 
         opt_j_c = conv_err_j
     else:
         if verbose:
-            print("lambda_k choosen by minimum test error")
+            print("lambda_k choosen by minimum test error", end= "")
         opt_j_c = min_err_j
 
     return opt_j_c + start_j
@@ -77,7 +104,9 @@ def get_modelselection(path, j):
         # indeces
         return len(path[j])
 
-def choose_j(path, test_errors = None, factor = -1, verbose = False, tol = 1e-4, p = None):
+def choose_j(path, test_errors = None, factor = -1,
+              verbose = False, tol = 1e-4, p = None,
+              ignore_conv = False):
     """
     Choose the best j based on the path and test errors
     Parameters
@@ -117,7 +146,7 @@ def choose_j(path, test_errors = None, factor = -1, verbose = False, tol = 1e-4,
         # check 'calculate_test_errors' function
         
         # O(np) for obtain test_errors
-        return data_driven_lambda_k(test_errors[:,1], path, verbose, tol) # O(k) = O(1) for fixed k
+        return data_driven_lambda_k(test_errors[:,1], path, verbose, tol, ignore_conv) # O(k) = O(1) for fixed k
         # return np.argmin(test_errors[:,1]) # O(k) = O(1) for fixed k
     
     else:
@@ -175,14 +204,15 @@ def read_CT(CT_file):
 def row_selection(path, test_errors,  p = None,
                   factor = 1/2, inbetween = 0, 
                   check_spps = False, CT_file = None,
-                  verbose = False, tol = 1e-4):
+                  verbose = False, tol = 1e-4, 
+                  ignore_conv = False):
     
     if check_spps:
         CT_spps, n_spps = read_CT(CT_file) # O(T^4)
         
 
     # path has (p,k) shape, where p is the number of features
-    j_opt = choose_j(path, test_errors, factor = factor, verbose=verbose, tol=tol, p = p) # O(k) = O(1) for fixed k
+    j_opt = choose_j(path, test_errors, factor = factor, verbose=verbose, tol=tol, p = p, ignore_conv = ignore_conv) # O(k) = O(1) for fixed k
     chosen_j = np.linspace(0, j_opt, 2 + inbetween,
                             endpoint=True, dtype=int) 
 
@@ -215,7 +245,7 @@ def row_selection(path, test_errors,  p = None,
         new_batches.append(  add_offset(beta_j_nz) )
         taken.add(j_int)
     
-    return list(new_batches)
+    return list(new_batches), j_opt
 
 def write_rows(outfile, rows):
 

@@ -73,12 +73,13 @@ def main():
     batch_args.add_argument("--factor", type=float, default=-1, metavar="", help="Proportion of row selection. If factor is -1, the proportion of row selected is based on test error.")
     batch_args.add_argument("--inbetween", type=int, default=5, metavar="",help="Number of in-between sets from the solution of the beginning of the path to the final row selection.")
     batch_args.add_argument("--check_spps", action="store_true", help="Check the number of unique species in the selected rows.")
+    batch_args.add_argument("--ignore_conv", action="store_true", help="Ignore convergence of test errors. If True, the function will ignore the convergence of the test errors and return the index of the minimum test error.")
     batch_args.add_argument("--tol_test", type=float, default=1e-4, metavar="", help="""
                             Tolerance for convergence of test errors for all k solutions in the ElNet path to pick the best lambda_k.
                             If the test errors are not converging, then lambda_k with the minimum test error is picked.""")
 
     args = parser.parse_args()
-    # print(args)
+    print(args)
 
     # assert args.factor >= -1 and args.factor <= 1, "Factor must be between 0 and 1."
     assert args.inbetween >= 0, "Inbetween must be greater or equal to 0."
@@ -187,11 +188,13 @@ def main():
 
     # overlapping batches
     # O(\rho T^4) for isle. If check_spps is True, it is O(T^4)
-    rows_selected = row_selection(path, test_errors, p,
+    rows_selected, j_opt = row_selection(path, test_errors, p,
                                   args.factor, args.inbetween, args.check_spps,
-                                  args.CT_file, args.verbose, args.tol_test,
-                                  ) 
+                                  args.CT_file, args.verbose, args.tol_test, 
+                                  args.ignore_conv)
     
+    if args.verbose:
+        print(f" at lambda: {lambdas[j_opt]}.")
     # O(\rho T^4) where \rho is the fraction of non-zero coefficients
     write_rows(picked_file, rows_selected)
 
