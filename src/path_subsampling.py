@@ -79,7 +79,7 @@ def main():
                             If the test errors are not converging, then lambda_k with the minimum test error is picked.""")
 
     args = parser.parse_args()
-    print(args)
+    # print(args)
 
     # assert args.factor >= -1 and args.factor <= 1, "Factor must be between 0 and 1."
     assert args.inbetween >= 0, "Inbetween must be greater or equal to 0."
