@@ -234,13 +234,16 @@ class ISLEPath:
 
     def elnet_pruning(self, T, y):
 
+        extra_str = f"Ensemble(eta={self.eta}, nu={self.nu}, max_leaves={self.max_leaves})"
+
         self.set_lambdas(T, y)
         elnet = ElasticNet(fit_intercept = self.fit_intercept,
                            max_iter = self.max_iter,
                            init_iter = 1,
                            copyX = True,
                            alpha = self.alpha,
-                           tol = self.tol)
+                           tol = self.tol,
+                           extra_str = extra_str)
 
         (self.path, 
          self.intercepts) = lasso_path(T, y, self.lambdas, elnet,
