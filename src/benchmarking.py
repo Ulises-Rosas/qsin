@@ -1,15 +1,14 @@
 from sparse_solutions_hd import ElasticNet, Lasso
 from qsin.utils import split_data
-# from sparse_solutions import ElasticNet, Lasso, split_data
 
 import numpy as np
 import time
 seed = 12038
 np.random.seed(seed)
-n = 10000
-p = 200
+n = 600
+p = 100000
 lam=0.0001
-alpha = 0.1
+alpha = 0.5
 tol = 1e-5
 X = np.random.randn(n, p)
 y = np.random.randn(n)
