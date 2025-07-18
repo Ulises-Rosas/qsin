@@ -1,4 +1,5 @@
-from sparse_solutions_hd import ElasticNet, Lasso, split_data
+from sparse_solutions_hd import ElasticNet, Lasso
+from qsin.utils import split_data
 # from sparse_solutions import ElasticNet, Lasso, split_data
 
 import numpy as np
