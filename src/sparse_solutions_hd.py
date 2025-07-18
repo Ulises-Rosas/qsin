@@ -91,7 +91,8 @@ class Lasso:
         A = set()
         # O(2p)
         for j, b in enumerate(self.beta):
-            if abs(b) >= self.zero_thresh:
+            # if abs(b) >= self.zero_thresh:
+            if b != 0.0:
                 # O(2)
                 A.add(j)
                 Aq.append(j)
