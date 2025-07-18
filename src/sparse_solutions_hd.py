@@ -57,11 +57,16 @@ class Lasso:
         self.y_sd = 1
 
         self._verbose = False
+
+        self.zero_thresh = 1e-7
+
+    def __str__(self):
+        return f"Lasso(tol={self.tol}, lam={self.lam}, max_iter={self.max_iter})"
     
     def update_beta(self, c1, n, all_p):
         update_beta_lasso_v2(
             self.X, self.beta, self.lam, self.r,
-            c1, n, all_p
+            c1, n, all_p, self.zero_thresh
         )
 
     def initial_iterations(self, c1, all_p):
@@ -73,19 +78,20 @@ class Lasso:
 
     def sorted_init_active_set(self):
         """
-        return the active set A as a deque
-        and a set A of the indices
-        Aq is the active set as a deque and it is sorted
-        with respect to the indices
+        Get the active set A: non-zero coefficients
 
-        A is the active set as a set
+        Returns
+        -------
+
+        Aq: the active set as a deque sorted with respect to the indices\\
+        A: the active set as a set, not necessarily sorted.
         """
 
         Aq = deque()
         A = set()
         # O(2p)
         for j, b in enumerate(self.beta):
-            if b != 0:
+            if abs(b) >= self.zero_thresh:
                 # O(2)
                 A.add(j)
                 Aq.append(j)
@@ -200,12 +206,7 @@ class Lasso:
         n, p = X.shape
         c1 = 2 / n
         
-        if not self.warm_start:
-            # He-styled 
-            # initialization 
-            # of the coefficients
-            # self.beta = rng.normal(0, np.sqrt(2/p), size=p)
-            
+        if not self.warm_start:            
             # zero initialization
             self.beta = np.zeros(p, dtype=X.dtype, order='F')
 
@@ -223,10 +224,10 @@ class Lasso:
             # if the active set is empty
             # then the model is converged
             if self.fit_intercept:
-                self.intercept = np.mean( self.y )
+                self.set_intercept()
             return
 
-        A_rr = np.array(Aq)
+        A_rr = np.array(Aq, dtype=np.int64)
         # print("Active set: ", A_rr)
 
         left_iter = self.max_iter - self.init_iter
@@ -239,8 +240,8 @@ class Lasso:
         for i in range(left_iter):
 
             # O(n)
-            xb_diff = np.zeros(n)
-            xb_new = np.zeros(n)
+            xb_diff = np.zeros(n, dtype=np.float64)
+            xb_new = np.zeros(n, dtype=np.float64)
             # O(np)
             self.cd_epoch(c1, n, A_rr, xb_new, xb_diff)
 
@@ -300,21 +301,25 @@ class Lasso:
             # if the iterations reach this point,
             # it means that there is still an active set.
             # then, the model did not converge
-            print("Model did not converge")
+            print(f"{self.__str__()} did not converge. Try to increase either max_iter or tol params.")
 
         if self.fit_intercept:
-            # this scaling will consider the unscaled
-            # data. The optimization was done assuming the
-            # scaled data. 
-            # If x_sd ever had a zero value, then
-            # it was replaced by 1.
-            self.beta /= self.x_sd
-            self.intercept = self.y_bar - np.dot(self.x_bar, self.beta) # O(p)
+            self.set_intercept()
+
+    def set_intercept(self):
+        # this scaling will consider the unscaled
+        # data. The optimization was done assuming the
+        # scaled data. 
+        # If x_sd ever had a zero value, then
+        # it was replaced by 1.
+        self.beta /= self.x_sd
+        self.intercept = self.y_bar - np.dot(self.x_bar, self.beta) # O(p)
+
 
     def cd_epoch(self, c1, n, chosen_ps, s_new, s_diff):
         epoch_lasso_v2(
             self.X, self.beta, self.lam, self.r,
-            c1, n, chosen_ps, s_new, s_diff
+            c1, n, chosen_ps, s_new, s_diff, self.zero_thresh
         )
 
     def exclusion_test(self, X, c1, A_c_arr):
@@ -422,19 +427,25 @@ class ElasticNet(Lasso):
                  prev_lam=None, 
                  fit_intercept=True, 
                  warm_start=False,
-                #  beta=None,
                  tol=0.001, 
+                 extra_str = "",
                  **kwargs):
         super().__init__(max_iter, lam, prev_lam, fit_intercept, warm_start,  tol, **kwargs)
 
         self.alpha = alpha
         self.lam = lam
+        self.extra_str = extra_str
 
         # when lam or alpha
         # change, these values are
         # updated at set_params
         self.lam_alpha = alpha * lam
         self.lam_1_alpha = (1 - alpha) * lam
+
+    def __str__(self):
+        main_str =  f"ElasticNet(tol={self.tol}, lam={self.lam}, alpha={self.alpha}, max_iter={self.max_iter})"
+
+        return f"{main_str}" if not self.extra_str else f"{self.extra_str}+{main_str}"
 
     def set_lam_alpha(self, lam, alpha):
         self.lam_alpha = alpha * lam
@@ -481,11 +492,11 @@ class ElasticNet(Lasso):
 
     def cd_epoch(self, c1, n, chosen_ps, xb_new, xb_diff):
         epoch_enet_v2(self.X, self.beta, self.lam_1_alpha, self.lam_alpha, self.r,
-                      c1, n, chosen_ps, xb_new, xb_diff)
+                      c1, n, chosen_ps, xb_new, xb_diff, self.zero_thresh)
 
     def update_beta(self, c1, n, chosen_ps):
         update_enet_v2(self.X, self.beta, self.lam_1_alpha, self.lam_alpha, self.r,
-                       c1, n, chosen_ps)
+                       c1, n, chosen_ps, self.zero_thresh )
 
     def dual_gap(self, y):
         return dualpa_elnet(self.r, self.X, y, self.beta, self.lam_1_alpha, self.lam_alpha, self.ny2)
@@ -627,34 +638,6 @@ def lasso_path(X_train, y_train, lams, model, print_progress = True):
         intercepts[i] = model.intercept
 
     return path, intercepts
-    
-def get_non_zero_coeffs(path, ZO, thresh = 0.5):
-    n_features = path.shape[0]
-    string_version = []
-    non_zero_coeffs = []
-    for j in range(path.shape[1]):
-        # j = 10
-        path_j = path[:,j]
-        ZO_j = ZO[:,j]
 
-        # checking if all species are
-        # covered by the selected coefficients
-        if np.any(ZO_j == 0):
-            continue
-
-        non_zero = path_j != 0
-
-        if np.all(non_zero):
-            break
-
-        if np.sum(non_zero) <= thresh*n_features:
-            non_zero_idx = list(np.where(non_zero)[0])
-            non_zero_idx_str = str(set(np.sort(non_zero_idx)))
-
-            if non_zero_idx_str not in string_version:
-                string_version.append(non_zero_idx_str)
-                non_zero_coeffs.append(non_zero_idx)
-
-    return non_zero_coeffs
 # endregion
 

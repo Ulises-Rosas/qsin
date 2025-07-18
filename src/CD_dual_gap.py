@@ -1,6 +1,6 @@
 
 import numpy as np
-from numba import njit
+from numba import njit, float64, int64
 
 @njit
 def msoft_threshold( delta, lam, denom):
@@ -42,16 +42,21 @@ def epoch_lasso(X, beta, lam, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps, s_new, diff
 
 
 @njit
-def epoch_lasso_v2(X, beta, lam, r, c1, n, chosen_ps, s_new, s_diff):
-    
+def epoch_lasso_v2(X: float64[:,:], beta: float64[:], lam: float64, r: float64[:], c1: float64,
+                   n: int64, chosen_ps: int64[:], s_new: float64[:], s_diff: float64[:], zero_thresh: float64) -> None:
+
+    denom = c1 * n
     # O(9*np) = O(np)
     for j in chosen_ps:
     
         b_old = beta[j]
-
         delta = c1 * ( np.dot(X[:,j], r) + n*b_old) # O(n)
-        denom = c1 * n
+
         beta[j] = msoft_threshold(delta, lam, denom)
+        # if beta[j] is too small, set it to 0
+        if abs(beta[j]) < zero_thresh:
+            beta[j] = 0.0
+
 
         diff_bj = b_old - beta[j]
         if diff_bj != 0.0:    
@@ -94,14 +99,20 @@ def epoch_enet(X, beta, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps, lam_1_alpha, lam_
 
 
 @njit
-def epoch_enet_v2(X, beta, lam_1_alpha, lam_alpha, r, c1, n, chosen_ps, s_new, s_diff):
+def epoch_enet_v2(X: float64[:,:], beta: float64[:], lam_1_alpha: float64, lam_alpha: float64, r: float64[:], 
+                  c1: float64, n: int64, chosen_ps: int64[:], s_new: float64[:], s_diff: float64[:], 
+                  zero_thresh: float64) -> None:
 
+    denom = (c1 * n) + lam_1_alpha
     for j in chosen_ps:
+
         b_old = beta[j]
-        
         delta = c1 * ( np.dot(X[:,j], r) + n*b_old )
-        denom = (c1 * n) + lam_1_alpha
+
         beta[j] = msoft_threshold(delta, lam_alpha, denom)
+        # if beta[j] is too small, set it to 0
+        if abs(beta[j]) < zero_thresh:
+            beta[j] = 0.0
 
         diff_bj = b_old - beta[j]
         if diff_bj != 0.0:    
@@ -137,15 +148,20 @@ def update_beta_lasso(beta, lam, c1, Xj_T_y, Xj_T_Xj, X_T_X, chosen_ps):
 
 
 @njit
-def update_beta_lasso_v2(X, beta, lam, r, c1, n, chosen_ps):
-    
+def update_beta_lasso_v2(X: float64[:,:], beta: float64[:], lam: float64, r: float64[:], 
+                         c1: float64, n: int64, chosen_ps: int64[:], zero_thresh: float64) -> None:
+
+    denom = c1 * n
     # O(3*np) = O(np)
     for j in chosen_ps:
-        b_old = beta[j]
 
+        b_old = beta[j]
         delta = c1 * ( np.dot(X[:,j], r) + n*b_old ) # O(n)
-        denom = c1 * n
+
         beta[j] = msoft_threshold(delta, lam, denom)
+        # if beta[j] is too small, set it to 0
+        if abs(beta[j]) < zero_thresh:
+            beta[j] = 0.0
 
         diff_bj = b_old - beta[j]
         if diff_bj != 0.0:
@@ -170,14 +186,19 @@ def update_beta_enet(beta, c1, Xj_T_y, Xj_T_Xj, X_T_X,
 
 
 @njit
-def update_enet_v2(X, beta, lam_1_alpha, lam_alpha, r, c1, n, chosen_ps):
+def update_enet_v2(X: float64[:, :], beta: float64[:], lam_1_alpha: float64, lam_alpha: float64,
+                   r: float64[:], c1: float64, n: int64, chosen_ps: int64[:], zero_thresh: float64) -> None:
 
+    denom = (c1 * n) + lam_1_alpha
     for j in chosen_ps:
+
         b_old = beta[j]
-        
         delta = c1 * ( np.dot(X[:,j], r) + n*b_old )
-        denom = (c1 * n) + lam_1_alpha
+
         beta[j] = msoft_threshold(delta, lam_alpha, denom)
+        # if beta[j] is too small, set it to 0
+        if abs(beta[j]) < zero_thresh:
+            beta[j] = 0.0
 
         diff_bj = b_old - beta[j]
         if diff_bj != 0.0:
