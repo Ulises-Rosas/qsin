@@ -2,19 +2,14 @@ import numpy as np
 import multiprocessing as mp
 from collections import deque
 
-from qsin.utils import get_lambdas
-
 def error_fn(theta_j,
              base_model = None, i = None, 
              X_train_t = None, X_test_t = None, 
              y_train_t = None, y_test_t = None,
-             verbose = True, seed = None,
-             K = 100, epsilon = 1e-3):
+             verbose = True, seed = None,):
     
     rng = np.random.RandomState(seed)
     nj, vj, lj, alpha = theta_j
-
-    lambdas = get_lambdas(alpha, X_train_t, y_train_t, K, epsilon, verbose=False)
     
     base_model.set_params(
         eta = nj,
@@ -23,7 +18,6 @@ def error_fn(theta_j,
         alpha = alpha,
         rng = rng,
         verbose = False,
-        lambdas = lambdas
     )
     base_model.fit(X_train_t, y_train_t)
     tmp_errors = base_model.score(X_test_t, y_test_t)
@@ -41,7 +35,7 @@ def error_fn(theta_j,
 
 
 def get_parallel_errors(base_model, X_train, y_train, full_grid, 
-                           rng, num_folds, ncores, K, epsilon, 
+                           rng, num_folds, ncores,
                            verbose = False):
     """
     let X_t be a fold in the training set 
@@ -99,7 +93,7 @@ def get_parallel_errors(base_model, X_train, y_train, full_grid,
                     (theta_j, base_model, i, 
                      X_train_t, X_test_t, 
                      y_train_t, y_test_t, 
-                     verbose, tmp_seed, K, epsilon)
+                     verbose, tmp_seed)
                 )
                 preout.append(errors)
 
@@ -147,7 +141,7 @@ def get_best_params(all_errors, folds = 5):
 
     return best_theta_j, min_rmse
 
-def ISLEPathCV(base_model, X_train, y_train, full_grid, folds, ncores, K = 100, epsilon = 1e-3,
+def ISLEPathCV(base_model, X_train, y_train, full_grid, folds, ncores,
                verbose = True, rng = None):
     """
     Find the best set of hyperparameters for the ISLEPath
@@ -167,7 +161,7 @@ def ISLEPathCV(base_model, X_train, y_train, full_grid, folds, ncores, K = 100, 
         
     all_errors = get_parallel_errors(
         base_model, X_train, y_train, full_grid,
-        rng, folds, ncores, K, epsilon, verbose
+        rng, folds, ncores, verbose
     )
 
     (best_theta_j,

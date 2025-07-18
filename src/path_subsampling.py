@@ -117,6 +117,9 @@ def main():
             fit_intercept = True,
             max_iter = args.max_iter,
             tol = args.tol,
+            # path parameters
+            epsilon = args.e,
+            K = args.K,
             # tree parameters
             M = args.M,
             max_features = args.max_features,
@@ -132,11 +135,8 @@ def main():
 
 
     (nj, vj, lj, alpha) = ISLEPathCV(base_model, X_train, y_train, full_grid,
-                                     args.folds, args.ncores, K=args.K, epsilon=args.e, 
-                                     verbose = args.verbose, rng=rng)    
-
-    lambdas = get_lambdas(alpha, X_train, y_train, args.K, args.e, verbose=args.verbose)
-    base_model.set_params(lambdas = lambdas)
+                                     args.folds, args.ncores,
+                                     verbose = args.verbose, rng=rng)
 
     # rng = np.random.RandomState(args.seed) # there is an effect of the seed on the path
     base_model.set_params(eta=nj, nu=vj, max_leaves=lj, alpha=alpha, 
@@ -148,6 +148,7 @@ def main():
     end_lasso = time.time() - start
     
     path = base_model.path
+    lambdas = base_model.lambdas
 
     if args.verbose:
         print("ISLE path done: ", end_lasso, " seconds")

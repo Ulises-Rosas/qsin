@@ -4,7 +4,7 @@ from copy import deepcopy
 from collections import deque
 
 from qsin.sparse_solutions_hd import ElasticNet, lasso_path
-from qsin.utils import progressbar
+from qsin.utils import progressbar, get_lambdas
 
 import numpy as np
 from sklearn.tree import DecisionTreeRegressor
@@ -142,6 +142,7 @@ def get_new_path(estimators, path):
 
 class ISLEPath:
     """
+    Path solution for the ISLE algorithm
     """
     def __init__(self,
                  # ISLE Ensemble params
@@ -159,8 +160,10 @@ class ISLEPath:
                  fit_intercept = True,
                  max_iter = 1000,
                  alpha = 0.5,
-                 lambdas = [0.1],
                  tol = 0.0001,
+                 # Path params
+                 epsilon  = 0.0001,
+                 K = 100,
                  # other params
                  verbose = True
                  ):
@@ -179,10 +182,13 @@ class ISLEPath:
         # Elastic Net params
         self.fit_intercept = fit_intercept
         self.max_iter = max_iter
-        # self.init_iter = init_iter
         self.alpha = alpha
-        self.lambdas = lambdas
+
         self.tol = tol
+
+        # Path params
+        self.epsilon = epsilon
+        self.K = K
 
         # other params
         self.verbose = verbose
@@ -194,6 +200,7 @@ class ISLEPath:
 
         self.mu = None
         self.sigma = None
+        self.lambdas = []  # will be set in fit method (pruning)
 
     def set_params(self, **params):
         """
@@ -227,15 +234,16 @@ class ISLEPath:
 
     def elnet_pruning(self, T, y):
 
-        self.elnet = ElasticNet(fit_intercept = self.fit_intercept,
-                                max_iter = self.max_iter,
-                                init_iter = 1,
-                                copyX = True,
-                                alpha = self.alpha,
-                                tol = self.tol)
+        self.set_lambdas(T, y)
+        elnet = ElasticNet(fit_intercept = self.fit_intercept,
+                           max_iter = self.max_iter,
+                           init_iter = 1,
+                           copyX = True,
+                           alpha = self.alpha,
+                           tol = self.tol)
 
         (self.path, 
-         self.intercepts) = lasso_path(T, y, self.lambdas, self.elnet,
+         self.intercepts) = lasso_path(T, y, self.lambdas, elnet,
                                           print_progress = self.verbose)
         # the effect of the intercept when (X,y) are centered
         # is negligible.
@@ -248,6 +256,9 @@ class ISLEPath:
         sd_zero = self.sigma == 0
         if np.any(sd_zero):
             self.sigma[sd_zero] = 1
+
+    def set_lambdas(self, X, y):
+        self.lambdas = get_lambdas(self.alpha, X, y, self.K, self.epsilon, verbose=self.verbose)
 
     def fit(self, X, y):
 
