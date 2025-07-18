@@ -9,7 +9,7 @@ from qsin.isle_path import get_new_path, ISLEPath
 from qsin.ISLEPathCV import create_full_grid, ISLEPathCV
 from qsin.row_selection import row_selection, write_rows
 from qsin.utils import (standardize_Xy, write_test_errors, 
-                        split_data, get_lambdas)
+                        split_data)
 
 def max_features_type(value):
     try:
