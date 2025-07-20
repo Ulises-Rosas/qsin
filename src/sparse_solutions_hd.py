@@ -58,7 +58,7 @@ class Lasso:
 
         self._verbose = False
 
-        self.zero_thresh = 1e-7
+        self.zero_thresh = 1e-10
 
     def __str__(self):
         return f"Lasso(tol={self.tol}, lam={self.lam}, max_iter={self.max_iter})"
