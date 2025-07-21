@@ -117,6 +117,7 @@ def main():
             fit_intercept = True,
             max_iter = args.max_iter,
             tol = args.tol,
+            zero_thresh = 1e-12,  # threshold for zero coefficients
             # path parameters
             epsilon = args.e,
             K = args.K,
@@ -169,6 +170,8 @@ def main():
         print("Min test RMSE: ", np.min(test_rmse), "at lambda: ",
               lambdas[np.argmin(test_rmse)])
 
+    # print(base_model.intercepts)
+    # print(base_model.path[:,np.argmin(test_rmse)])
 
     # test errors contain the first column with lambda values
     # and the second column with RMSE values.

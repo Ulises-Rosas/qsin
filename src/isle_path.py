@@ -161,6 +161,7 @@ class ISLEPath:
                  max_iter = 1000,
                  alpha = 0.5,
                  tol = 0.0001,
+                 zero_thresh = 1e-15,  # threshold for zero coefficients
                  # Path params
                  epsilon  = 0.0001,
                  K = 100,
@@ -183,6 +184,7 @@ class ISLEPath:
         self.fit_intercept = fit_intercept
         self.max_iter = max_iter
         self.alpha = alpha
+        self.zero_thresh = zero_thresh # internal parameter for the elastic net
 
         self.tol = tol
 
@@ -243,6 +245,8 @@ class ISLEPath:
                            copyX = True,
                            alpha = self.alpha,
                            tol = self.tol,)
+        
+        elnet.zero_thresh = self.zero_thresh
 
         (self.path, 
          self.intercepts) = lasso_path(T, y, self.lambdas, elnet,

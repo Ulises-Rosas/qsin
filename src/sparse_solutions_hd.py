@@ -26,8 +26,7 @@ class Lasso:
                 #  beta = None,
                  tol = 0.001,
                  init_iter = 1,
-                 copyX = False,
-                 **kwargs):
+                 copyX = False,):
         
         self.max_iter = max_iter
         self.lam = lam
@@ -433,9 +432,11 @@ class ElasticNet(Lasso):
                  prev_lam=None, 
                  fit_intercept=True, 
                  warm_start=False,
-                 tol=0.001, 
-                 **kwargs):
-        super().__init__(max_iter, lam, prev_lam, fit_intercept, warm_start,  tol, **kwargs)
+                 tol=1e-4,
+                 init_iter=1,
+                 copyX=False):
+        # passes arguments to the Lasso class
+        super().__init__(max_iter, lam, prev_lam, fit_intercept, warm_start,  tol, init_iter, copyX)
 
         self.alpha = alpha
         self.lam = lam
