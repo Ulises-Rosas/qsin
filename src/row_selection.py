@@ -20,6 +20,10 @@ def conv_errs(test_errors, tol = 1e-4):
 def constraint_test_error(test_errors, path):
     start_j = 0
     for j in range(len(test_errors)):
+        if j == 0:
+            # first j is always zero. If not, it is
+            # floating point error
+            continue
         sel = get_modelselection(path, j)
         if sel:
             start_j = j
