@@ -54,11 +54,12 @@ class Lasso:
         self.y_bar = 0.0
 
         self.x_sd = np.array([])
-        self.y_sd = 1
+        self.y_sd = 1.0
 
         self._verbose = False
 
-        self.zero_thresh = 1e-10
+        self.zero_thresh = 1e-15
+        self.message_conv = ""
 
     def __str__(self):
         return f"Lasso(tol={self.tol}, lam={self.lam}, max_iter={self.max_iter})"
@@ -302,7 +303,7 @@ class Lasso:
             # if the iterations reach this point,
             # it means that there is still an active set.
             # then, the model did not converge
-            print(f"{self.__str__()} did not converge. Try to increase either max_iter or tol params.")
+            self.message_conv = f"{self.__str__()} did not converge. Try to increase either max_iter or tol params."
 
         if self.fit_intercept:
             self.set_intercept()
@@ -316,6 +317,10 @@ class Lasso:
         self.beta /= self.x_sd
         self.intercept = self.y_bar - np.dot(self.x_bar, self.beta) # O(p)
 
+        if abs(self.intercept) < self.zero_thresh:
+            # if the intercept is close to zero, then
+            # we can set it to zero
+            self.intercept = 0.0
 
     def cd_epoch(self, c1, n, chosen_ps, s_new, s_diff):
         epoch_lasso_v2(
@@ -429,13 +434,11 @@ class ElasticNet(Lasso):
                  fit_intercept=True, 
                  warm_start=False,
                  tol=0.001, 
-                 extra_str = "",
                  **kwargs):
         super().__init__(max_iter, lam, prev_lam, fit_intercept, warm_start,  tol, **kwargs)
 
         self.alpha = alpha
         self.lam = lam
-        self.extra_str = extra_str
 
         # when lam or alpha
         # change, these values are
@@ -444,9 +447,7 @@ class ElasticNet(Lasso):
         self.lam_1_alpha = (1 - alpha) * lam
 
     def __str__(self):
-        main_str =  f"ElasticNet(tol={self.tol}, lam={self.lam}, alpha={self.alpha}, max_iter={self.max_iter})"
-
-        return f"{main_str}" if not self.extra_str else f"{self.extra_str}+{main_str}"
+        return f"ElasticNet(tol={self.tol}, lam={self.lam}, alpha={self.alpha}, max_iter={self.max_iter})"
 
     def set_lam_alpha(self, lam, alpha):
         self.lam_alpha = alpha * lam
@@ -597,7 +598,8 @@ def k_fold_cv_random(X, y,
 
     return best_[0]
 
-def lasso_path(X_train, y_train, lams, model, print_progress = True):
+def lasso_path(X_train, y_train, lams, model, print_progress = True,
+               extra_str = ""):
     """
     compute the lasso path based on the training set
     and  with errors based on the test set
@@ -616,6 +618,11 @@ def lasso_path(X_train, y_train, lams, model, print_progress = True):
 
     model.set_params(lam=lams[0])
     model.fit(X_train, y_train)
+    # all values at the beginning of the path are zeros.
+    # convergence warning are due to floating point errors
+    # and it should be ignored
+    if model.message_conv:
+        model.message_conv = ""
 
     path[:,0] = model.beta
     intercepts[0] = model.intercept
@@ -630,10 +637,12 @@ def lasso_path(X_train, y_train, lams, model, print_progress = True):
 
         model.set_params(lam = lams[i],
                           warm_start = True, 
-                          prev_lam = None
-                          )
-            
+                          prev_lam = None)
         model.fit(X_train, y_train)
+
+        if model.message_conv:
+            print(f"Warning: {extra_str}+{model.message_conv}")
+            model.message_conv = ""
 
         path[:,i] = model.beta
         intercepts[i] = model.intercept

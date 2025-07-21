@@ -126,7 +126,7 @@ def get_new_path(estimators, path):
 
         # j = 2
         coeffs = path[:,j]
-        coeffs_logic = coeffs != 0
+        coeffs_logic = coeffs != 0.0
 
         tmp_ensemble = estimators[coeffs_logic]
 
@@ -242,12 +242,12 @@ class ISLEPath:
                            init_iter = 1,
                            copyX = True,
                            alpha = self.alpha,
-                           tol = self.tol,
-                           extra_str = extra_str)
+                           tol = self.tol,)
 
         (self.path, 
          self.intercepts) = lasso_path(T, y, self.lambdas, elnet,
-                                          print_progress = self.verbose)
+                                       print_progress = self.verbose,
+                                       extra_str = extra_str)
         # the effect of the intercept when (X,y) are centered
         # is negligible.
         # print("Intercepts: ", self.intercepts)
