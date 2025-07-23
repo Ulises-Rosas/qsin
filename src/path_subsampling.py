@@ -99,7 +99,7 @@ def main():
     data = np.loadtxt(args.Xy_file, delimiter=',', skiprows=1)
     X, y = data[:, :-1], data[:, -1]
     n,p = X.shape # p (\approx T^4) used for row selection only
-    rng = np.random.RandomState(args.seed)
+    rng = np.random.RandomState(seed=args.seed)
 
 
     num_test = int(n*args.p_test)
@@ -135,11 +135,11 @@ def main():
                                   cv_sample=args.cv_sample, rng=rng)
 
 
-    (nj, vj, lj, alpha) = ISLEPathCV(base_model, X_train, y_train, full_grid,
-                                     args.folds, args.ncores,
-                                     verbose = args.verbose, rng=rng)
+    (nj, vj, lj, alpha) = ISLEPathCV(base_model, X_train, y_train, full_grid, 
+                                     args.folds, args.ncores, 
+                                     verbose = args.verbose, rng=rng, tmp_seed=args.seed)
 
-    # rng = np.random.RandomState(args.seed) # there is an effect of the seed on the path
+    rng = np.random.RandomState(seed=args.seed) # reinitialize rng for the ensemble
     base_model.set_params(eta=nj, nu=vj, max_leaves=lj, alpha=alpha, 
                           verbose=args.verbose, rng=rng)
 
@@ -171,7 +171,9 @@ def main():
               lambdas[np.argmin(test_rmse)])
 
     # print(base_model.intercepts)
-    # print(base_model.path[:,np.argmin(test_rmse)])
+    # sel = base_model.path[:,np.argmin(test_rmse)]
+    # print(sel)
+    # print(np.sum(sel != 0), "non-zero coefficients at the best lambda_k solution.")
 
     # test errors contain the first column with lambda values
     # and the second column with RMSE values.
