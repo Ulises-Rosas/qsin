@@ -23,7 +23,7 @@ def make_isle_ensemble(X_train, y_train, model, eta, nu,
     
 
     n_train = X_train.shape[0]
-    train_sample_size = int(n_train*eta)
+    train_sample_size = np.clip( int(n_train*eta), 1, n_train )
     if verbose:
         print("Starting ISLE ensemble")
         print("Random sample size for trees: ", train_sample_size)
@@ -232,6 +232,10 @@ class ISLEPath:
         if self.verbose:
             print("Isle ensemble done: ", end_isle, " seconds")
 
+        # centering T for Elastic Net
+        self.set_mu_sigma(T)
+        T = (T - self.mu)/self.sigma
+
         return T
 
     def elnet_pruning(self, T, y):
@@ -266,15 +270,13 @@ class ISLEPath:
 
     def set_lambdas(self, X, y):
         self.lambdas = get_lambdas(self.alpha, X, y, self.K, self.epsilon, verbose=self.verbose)
+        # max_lam = 1.7468125572517783
+        # self.lambdas =  np.logspace(np.log10(max_lam*self.epsilon), np.log10(max_lam), self.K, endpoint=True)[::-1]
 
     def fit(self, X, y):
 
         if self.make_ensemble:
             T = self.generate_ensemble(X, y)
-            
-            # centering T for Elastic Net
-            self.set_mu_sigma(T)
-            T = (T - self.mu)/self.sigma
             # no need for centering in y.
         else:
             # if we are not making an ensemble,
@@ -311,6 +313,21 @@ class ISLEPath:
         
         return y_pred
 
-    def score(self, X, y):
+    def score(self, X, y, metric = 'rmse'):
+        
         y_pred = self.predict(X)
-        return np.sqrt(np.mean((y_pred - y.reshape(-1,1))**2, axis=0))
+        # y_pred \in R^{n,K}, e.g.,
+
+        # y_pred = np.ones((3,5)) + np.random.normal(size=(3,5))
+        # y = np.array([1,2,3]).reshape(-1,1)
+
+        if metric == 'rmse':
+            return np.sqrt(np.mean((y_pred - y.reshape(-1,1))**2, axis=0))
+        
+        elif metric == 'sse':
+            # sum of squared errors 
+            return np.sum((y_pred - y.reshape(-1,1))**2, axis=0)
+        
+        else:
+            raise ValueError(f"Unknown metric: {metric}")
+    

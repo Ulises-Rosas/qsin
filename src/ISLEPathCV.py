@@ -5,15 +5,24 @@ from collections import deque
 def error_fn(theta_j, base_model = None, i = None, 
              X_train_t = None, X_test_t = None, 
              y_train_t = None, y_test_t = None,
-             verbose = True, seed = None,):
+             verbose = True, seed = None, n = 1):
     """
     Compute the error for a given set of hyperparameters.
     """
     rng = np.random.RandomState(seed)
     nj, vj, lj, alpha = theta_j
     
+    # scaled n_j such that the sub sample size
+    # [nj_p * N_{I\I_k} ] = [ nj * n ] 
+    # matches the desired number of rows that n_j induces 
+    # into the complete training set.
+    N_train = X_train_t.shape[0]
+
+    if nj is not None:
+        nj_p = nj*n/N_train
+
     base_model.set_params(
-        eta = nj,
+        eta = nj_p,
         nu = vj,
         max_leaves = lj,
         alpha = alpha,
@@ -21,15 +30,16 @@ def error_fn(theta_j, base_model = None, i = None,
         verbose = False,
     )
     base_model.fit(X_train_t, y_train_t)
-    tmp_errors = base_model.score(X_test_t, y_test_t)
+    # sum of squared errors:
+    tmp_errors = base_model.score(X_test_t, y_test_t, metric = 'sse')
 
     if verbose:
-        min_err = np.round(np.min(tmp_errors), 3)
-        fold_message  = f"Fold: {i}, alpha: {alpha}"
-        fold_message += f", eta: {nj}" if nj else ""
+        min_err = np.round(tmp_errors[-1], 4)
+        fold_message  = f"Fold: {i}, (N = {N_train}), alpha: {alpha}"
+        fold_message += f", eta: {nj} (N for trees: {int(nj*n)})" if nj else ""
         fold_message += f", nu: {vj}" if vj else ""
         fold_message += f", leaves: {lj}" if lj else ""
-        fold_message += f", err: {min_err}, seed: {seed}"
+        fold_message += f", end-of-path SS.Err: {min_err}"
         print(fold_message)
 
     return (tmp_errors, theta_j)
@@ -48,9 +58,9 @@ def get_parallel_errors(base_model, X_train, y_train, full_grid,
     For a given alpha j and f folds,
     the RMSE for all Lambda values:
 
-    [ [ RMSE_1,j \in R^{1 x K} ]   -> (X_1, a_j)
+    [ [ SSE_1,j \in R^{1 x K} ]   -> (X_1, a_j)
        ...
-      [ RMSE_f,j \in R^{1 x K} ] ]  -> (X_f, a_j)
+      [ SSE_f,j \in R^{1 x K} ] ]  -> (X_f, a_j)
 
     Where  K is the number of Lambda values.
 
@@ -73,6 +83,9 @@ def get_parallel_errors(base_model, X_train, y_train, full_grid,
     y_train = y_train[all_index] # check to shuffle y!
     
     # tmp_seed = rng.randint(0, 2**31 - 1)
+    if verbose:
+        print("Seed for the ensemble: ", tmp_seed)
+
     out = deque([])
     with mp.Pool( processes = ncores ) as pool:
 
@@ -92,7 +105,7 @@ def get_parallel_errors(base_model, X_train, y_train, full_grid,
                     (theta_j, base_model, i, 
                      X_train_t, X_test_t, 
                      y_train_t, y_test_t, 
-                     verbose, tmp_seed) # seed fixed for the ensemble only
+                     verbose, tmp_seed, n) # seed fixed for the ensemble only
                 )
                 preout.append(errors)
 
@@ -101,37 +114,48 @@ def get_parallel_errors(base_model, X_train, y_train, full_grid,
 
     return list(out)
 
-def get_best_params(all_errors, folds = 5):
+def get_best_params(all_errors, n = 1):
     # all_errors = out
     """
     Fold_alpha has the following structure:
     [  theta_{1,j}, ..., theta_{f,j}  ] 
 
-    Fold error has the following structure:
-    [ [ RMSE_1,j \in R^{1 x K} ]   -> theta_{1,j}
+    Fold error has the following structure for theta_j:
+    [ [ SSE_{1,j} \in R^{1 x K} ]   -> theta_{1,j}
        ...
-      [ RMSE_f,j \in R^{1 x K} ] ]  -> theta_{f,j}
+      [ SSE_{f,j} \in R^{1 x K} ] ]  -> theta_{f,j}
+    
+    For column k:
+     (1/n) \Sum_{f = 1}^K  SSE_{i,j,k} = (1/n) \Sum_{i = 1}^n e^2_{i,j,k} =: MSE_{j,k}
 
-    where f is the fold index and j is the hyperparameter index.
+    where f is the fold index, j is the hyperparameter index, and k 
+    the lambda value index. This reduces to
+
+    {.., theta_j: [ MSE_{j,1} ... MSE_{j,K} ], ...}
+
+    We find the theta_j that has the lowest MSE. Alternatively it 
+    we can also get the sqrt
     """
     # getting row-wise average of the errors
     dict_errs = {}
+
+    # (1/n) \Sum_{f = 1}^K  SSE_{i,j,k}
     for (e_fj, theta_j) in all_errors:
         if isinstance(theta_j, list):
             # make it hashable if it is a list
             theta_j = tuple(theta_j)  
 
         if theta_j not in dict_errs:
-            dict_errs[theta_j] = e_fj/folds
+            dict_errs[theta_j] = (e_fj/n)
 
         else:
-            dict_errs[theta_j] += e_fj/folds
+            dict_errs[theta_j] += (e_fj/n)
 
-    best_theta_j = 0
+    best_theta_j = None
     min_rmse = np.inf
 
     for theta_j, ave_e_j in dict_errs.items():
-        tmp_cv_err = np.min(ave_e_j)
+        tmp_cv_err = np.min(np.sqrt(ave_e_j))
 
         if tmp_cv_err < min_rmse:
             min_rmse = tmp_cv_err
@@ -196,7 +220,7 @@ def ISLEPathCV(base_model, X_train, y_train, full_grid, folds, ncores,
     )
 
     (best_theta_j,
-     min_rmse) = get_best_params(all_errors, folds=folds)
+     min_rmse) = get_best_params(all_errors, n = X_train.shape[0])
     
     if verbose:
         print("CV best (eta, nu, leaves, alpha): ", best_theta_j)
