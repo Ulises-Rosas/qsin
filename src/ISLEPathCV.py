@@ -126,7 +126,7 @@ def get_best_params(all_errors, n = 1):
       [ SSE_{f,j} \in R^{1 x K} ] ]  -> theta_{f,j}
     
     For column k:
-     (1/n) \Sum_{f = 1}^K  SSE_{i,j,k} = (1/n) \Sum_{i = 1}^n e^2_{i,j,k} =: MSE_{j,k}
+     (1/n) \Sum_{f = 1}^K  SSE_{f,j,k} = (1/n) \Sum_{i = 1}^n e^2_{i,j,k} =: MSE_{j,k}
 
     where f is the fold index, j is the hyperparameter index, and k 
     the lambda value index. This reduces to
