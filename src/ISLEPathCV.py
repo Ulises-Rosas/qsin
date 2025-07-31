@@ -5,7 +5,7 @@ from collections import deque
 def error_fn(theta_j, base_model = None, i = None, 
              X_train_t = None, X_test_t = None, 
              y_train_t = None, y_test_t = None,
-             verbose = True, seed = None, n = 1):
+             verbose = True, seed = None):
     """
     Compute the error for a given set of hyperparameters.
     """
@@ -18,11 +18,11 @@ def error_fn(theta_j, base_model = None, i = None,
     # into the complete training set.
     N_train = X_train_t.shape[0]
 
-    if nj is not None:
-        nj_p = nj*n/N_train
+    # if nj is not None:
+    #     nj_p = nj*n/N_train
 
     base_model.set_params(
-        eta = nj_p,
+        eta = nj,
         nu = vj,
         max_leaves = lj,
         alpha = alpha,
@@ -35,11 +35,11 @@ def error_fn(theta_j, base_model = None, i = None,
 
     if verbose:
         min_err = np.round(tmp_errors[-1], 4)
-        fold_message  = f"Fold: {i}, (N = {N_train}), alpha: {alpha}"
-        fold_message += f", eta: {nj} (N for trees: {int(nj*n)})" if nj else ""
+        fold_message  = f"Fold: {i}, alpha: {alpha}"
+        fold_message += f", eta: {nj} (N for trees: {int(nj*N_train)})" if nj else ""
         fold_message += f", nu: {vj}" if vj else ""
         fold_message += f", leaves: {lj}" if lj else ""
-        fold_message += f", end-of-path SS.Err: {min_err}"
+        fold_message += f", Err: {min_err}"
         print(fold_message)
 
     return (tmp_errors, theta_j)
@@ -84,7 +84,7 @@ def get_parallel_errors(base_model, X_train, y_train, full_grid,
     
     # tmp_seed = rng.randint(0, 2**31 - 1)
     if verbose:
-        print("Seed for the ensemble: ", tmp_seed)
+        print("Seed for the ensemble: ", tmp_seed, ", fold size: ", fold_size)
 
     out = deque([])
     with mp.Pool( processes = ncores ) as pool:
@@ -105,7 +105,7 @@ def get_parallel_errors(base_model, X_train, y_train, full_grid,
                     (theta_j, base_model, i, 
                      X_train_t, X_test_t, 
                      y_train_t, y_test_t, 
-                     verbose, tmp_seed, n) # seed fixed for the ensemble only
+                     verbose, tmp_seed) # seed fixed for the ensemble only
                 )
                 preout.append(errors)
 
