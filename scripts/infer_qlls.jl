@@ -43,14 +43,14 @@ function help_func()
     Optional arguments:
         --outfile outfile: str; output file name. (default: $outfile)
         --optBL: bool; optimize branch lengths (default: $optBL)
-        --bl_mean: float; mean branch length (default: $bl_mean)
+        --bl_mean: float; mean branch length. Recommended. (default: $bl_mean)
         --scale_bl: bool; scale branch lengths with bl_mean (default: $scale_bl)
         --randexp_bl: bool; set branch lengths with random exponential distribution
                       (default: $randexp_bl)
-        --ftolRel: float; relative tolerance for the objective function (default: $ftolRel)
-        --ftolAbs: float; absolute tolerance for the objective function (default: $ftolAbs)
-        --xtolRel: float; relative tolerance for parameter changes (default: $xtolRel)
-        --xtolAbs: float; absolute tolerance for parameter changes  (default: $xtolAbs)
+        --ftolRel: float; if --optBL, relative tolerance for the objective function (default: $ftolRel)
+        --ftolAbs: float; if --optBL, absolute tolerance for the objective function (default: $ftolAbs)
+        --xtolRel: float; if --optBL, relative tolerance for parameter changes (default: $xtolRel)
+        --xtolAbs: float; if --optBL, absolute tolerance for parameter changes  (default: $xtolAbs)
         --no_up_to_constant: do not use the up to constant option. Not up to constant
                    use raw qll pseudolikelihood to estimate overall pseudolikelihood
         --ncores: int; number of cores (default: $ncores)        
