@@ -15,7 +15,6 @@ xtolRel = 1e-2
 up_to_constant = true
 optBL = false
 bl_mean = 1.25
-scale_bl = false
 randexp_bl = false
 
 # ftolRel = 1e-1
@@ -30,7 +29,8 @@ function help_func()
     help_message = """
 
     Calculate expected CF and overall pseudolikelihood score from
-    a set of defined phylogenetic networks
+    a set of defined phylogenetic networks. Random branch lengths are
+    scaled to have an average of "--bl_mean".
 
     Usage: $(PROGRAM_FILE) CFfile [network files]
             --outfile outfile
@@ -43,10 +43,9 @@ function help_func()
     Optional arguments:
         --outfile outfile: str; output file name. (default: $outfile)
         --optBL: bool; optimize branch lengths (default: $optBL)
-        --bl_mean: float; mean branch length. Recommended. (default: $bl_mean)
-        --scale_bl: bool; scale branch lengths with bl_mean (default: $scale_bl)
+        --bl_mean: float; mean branch length. (default: $bl_mean)
         --randexp_bl: bool; set branch lengths with random exponential distribution
-                      (default: $randexp_bl)
+                            with mean "--bl_mean" (default: $randexp_bl)
         --ftolRel: float; if --optBL, relative tolerance for the objective function (default: $ftolRel)
         --ftolAbs: float; if --optBL, absolute tolerance for the objective function (default: $ftolAbs)
         --xtolRel: float; if --optBL, relative tolerance for parameter changes (default: $xtolRel)
@@ -95,10 +94,7 @@ for i in eachindex(ARGS)
 
         elseif ARGS[i] == "--bl_mean"
             global bl_mean = parse(Float64, ARGS[i+1]);
-        
-        elseif ARGS[i] == "--scale_bl"
-            global scale_bl = true;
-        
+                
         elseif ARGS[i] == "--randexp_bl"
             global randexp_bl = true;
 
@@ -224,7 +220,7 @@ function get_xy_i(dat, qlls_dict)
     return xy_i
 end
 
-@everywhere function set_bls(net, names, scale_bl, randexp_bl, bl_mean; rng)
+@everywhere function set_bls(net, names, randexp_bl, bl_mean; rng)
 
     names = names[randperm(rng, length(names))]
     
@@ -232,23 +228,22 @@ end
     # with the names from the CFs
     set_spps_names(net, names)
 
-    if scale_bl
-        println("scaling branch lengths with average: ", bl_mean)
-        bl_scale(bl_mean, net)
-        return
-    end
-
     if randexp_bl
         println("setting branch lengths with exp. dist. with mean: ", bl_mean)
         rate = 1/bl_mean
         bl_randexp(rate, net; rng = rng)
         return 
+    else
+        println("scaling branch lengths with average: ", bl_mean)
+        bl_scale(bl_mean, net)
+        return
     end
+
 
 end
 
 function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant, optBL,
-    scale_bl, randexp_bl, bl_mean,
+    randexp_bl, bl_mean,
     ftolRel, ftolAbs, xtolRel, xtolAbs; seed = 12038)
     
     rng = MersenneTwister(seed)
@@ -305,7 +300,7 @@ function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant, optBL,
         all_buckyCF_tmp = deepcopy(all_buckyCF)        
         netstart = readTopology(netfile) # O(n)
 
-        set_bls(netstart, CF_names, scale_bl, randexp_bl, bl_mean; rng = rng)
+        set_bls(netstart, CF_names, randexp_bl, bl_mean; rng = rng)
 
         process_network(netstart, all_buckyCF_tmp, up_to_constant, optBL,
          ftolRel, ftolAbs, xtolRel, xtolAbs)
@@ -340,5 +335,5 @@ function evaluate_sims(networks, buckyCFfile, outputfile, up_to_constant, optBL,
 end
 
 @time evaluate_sims(nets, CFfile, outfile, up_to_constant, optBL,
-                    scale_bl, randexp_bl, bl_mean,
+                    randexp_bl, bl_mean,
                     ftolRel, ftolAbs, xtolRel, xtolAbs; seed = seed)
