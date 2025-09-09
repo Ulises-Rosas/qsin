@@ -116,19 +116,21 @@ end
     best_dist = Inf;
     best_root = NaN;
 
-    if !let_root
-        try
-            best_dist = get_dist(true_net, net_file, nothing, thresh; let_root = false);
-        catch e
-            nothing
-        end
+    # baseline distance is without rooting
+    try
+        best_dist = get_dist(true_net, net_file, nothing, thresh; let_root = false);
+    catch e
+        nothing
+    end
 
+    if !let_root || best_dist == 0.0
         return best_dist, NaN;
     end
 
     for curr_root in all_taxa
         # curr_root=all_taxa[2];
         try
+            # println("Trying root: ", curr_root);
             curr_dist = get_dist(true_net, net_file, curr_root, thresh; let_root = true);
 
             # if verbose
@@ -214,7 +216,7 @@ end
     # # get base name
     tmp_name_base = basename(tmp_net_file);
     
-    row = match(r".*_row(.+)_[bn].*", tmp_name_base)[1];
+    row = match(r".*_row([0-9._]+)_[bn].*", tmp_name_base)[1];
     boot =  match(r".*_boot([0-9]+)_.*", tmp_name_base)[1];
     # boot =  match(r".*_boot([0-9]+).net", tmp_name_base)[1];
 

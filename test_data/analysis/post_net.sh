@@ -5,6 +5,7 @@ inferd_nets_loc=$2
 compare_nets=$3
 process_time=$4
 process_pseudo=$5
+ncores=$6
 
 
 log_file=$(ls $inferd_nets_loc/*.log)
@@ -15,7 +16,7 @@ inferd_nets_loc_base=$(basename $inferd_nets_loc)
 $compare_nets $full_data\
                   $inferd_nets_loc/*_nets.txt\
                   --outfile $inferd_nets_loc/compared_nets_$inferd_nets_loc_base.csv\
-                  --thresh 0.0
+                  --thresh 0.0 --ncores $ncores
 
 $process_time $log_file\
                   -o $inferd_nets_loc/processed_time_$inferd_nets_loc_base.csv
