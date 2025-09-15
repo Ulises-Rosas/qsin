@@ -29,7 +29,7 @@ For this it requires that you have `julia`, `R` and `python` installed in your s
 
 ```julia
 using Pkg
-Pkg.add("CSV"); Pkg.add("DataFrames"); Pkg.add("PhyloNetworks"); Pkg.add("Suppressor")
+Pkg.add("CSV"); Pkg.add("DataFrames"); Pkg.add(Pkg.PackageSpec(;name="PhyloNetworks", version="0.16.4")); Pkg.add("Suppressor")
 ```
 You can install the dependencies for `R` by running the following command in the R console:
 
