@@ -13,7 +13,8 @@ conda activate qsin
 ./build.sh 
 ```
 
-#### Option 2: Using Mamba
+<details>
+<summary><b> Option 2: Using Mamba</b></summary>
 
 ```bash
 # construct the environment
@@ -22,8 +23,11 @@ conda activate qsin
 # install julia dependencies at qsin
 ./build.sh
 ```
+</details>
 
-#### Option 3: Manual Installation
+
+<details>
+<summary><b> Option 3: Manual Installation</b></summary>
 
 For this it requires that you have `julia`, `R` and `python` installed in your system. You can install the dependencies for `julia` by running the following command in the Julia console:
 
@@ -42,6 +46,7 @@ You can install the dependencies for `python` by running the following command i
 ```bash
 pip install qsin
 ```
+</details>
 
 ## Overview: A minimal example
 
