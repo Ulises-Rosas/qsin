@@ -3,6 +3,7 @@
 ## Installation
 
 The installation currently works for Linux and MacOS only. The two currently available options for installing `qsin` use the files `environment.yml` and `build.sh`, which are located among this repository files.
+
 #### Option 1: Using conda
 
 ```bash
@@ -13,8 +14,19 @@ conda activate qsin
 ./build.sh 
 ```
 
+#### Option 2: Using Docker
+
+```bash
+# Pull image
+docker pull ulisesrosas/qsin_docker:latest
+
+# run container
+docker run -it ulisesrosas/qsin_docker
+```
+
+
 <details>
-<summary><b> Option 2: Using Mamba</b></summary>
+<summary><b> Option 3: Using Mamba</b></summary>
 
 ```bash
 # construct the environment
@@ -27,7 +39,7 @@ conda activate qsin
 
 
 <details>
-<summary><b> Option 3: Manual Installation</b></summary>
+<summary><b> Option 4: Manual Installation</b></summary>
 
 For this it requires that you have `julia`, `R` and `python` installed in your system. You can install the dependencies for `julia` by running the following command in the Julia console:
 
