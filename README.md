@@ -68,8 +68,8 @@ pip install qsin
 # create dir where sim nets will be stored
 mkdir -p ./test_data/test_sims
 
-# simulate networks
-sim_nets.R 6 --max_iter 500 --prefix test --out_path ./test_data/test_sims
+# simulate 1000 random networks
+sim_nets.R 6 --max_iter 1000 --prefix test --out_path ./test_data/test_sims
 ```
 
 ### 2. Expected concordance factors for simulated networks
@@ -77,7 +77,8 @@ sim_nets.R 6 --max_iter 500 --prefix test --out_path ./test_data/test_sims
 ```bash
 infer_qlls.jl ./test_data/1_seqgen.CFs.csv\
               ./test_data/test_sims/test*.txt\
-              --outfile ./test_data/test_qll.csv
+              --outfile ./test_data/test_qll.csv\
+              --ncores 4
 ```
 
 ### 3. Create subsamples
@@ -148,7 +149,8 @@ infer_nets_batches.jl ./test_data/1_seqgen.QMC.tre\
         ./test_data/linear_batches_last.txt\
         --h_max 1\
         --prefix linear_overlapped\
-        --ncores 10
+        --ncores 4\
+        --nruns 10
 ```
 
 We can compare the obtained networks with the original network, which is available in the test_data folder.  You  might need to install the PhyloPlots and RCall packages to run this code in `julia`. The first plot is the full data network, and the second plot is the half data network.
