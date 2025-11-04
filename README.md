@@ -91,7 +91,7 @@ path_subsampling.py ./test_data/test_qll.csv\
         --e 1e-2    \
         --cv\
         --folds 2\
-        --alpha 0.5 0.95 0.99 1\
+        --alpha 0.5 0.95 0.99\
         --ncores 4\
         --verbose\
         --prefix ./test_data/linear_batches
