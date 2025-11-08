@@ -26,7 +26,8 @@ class Lasso:
                 #  beta = None,
                  tol = 0.001,
                  init_iter = 1,
-                 copyX = False,):
+                 copyX = False,
+                 check_dualgap = True):
         
         self.max_iter = max_iter
         self.lam = lam
@@ -59,6 +60,7 @@ class Lasso:
 
         self.zero_thresh = 1e-15
         self.message_conv = ""
+        self.check_dualgap = check_dualgap
 
     def __str__(self):
         return f"Lasso(tol={self.tol}, lam={self.lam}, max_iter={self.max_iter})"
@@ -284,13 +286,14 @@ class Lasso:
                     break
 
                 else:
-                    # O(np + n + p) = O(np)
-                    w_d_gap = self.dual_gap(self.y)
-                    if w_d_gap < self.tol:
-                        if self._verbose:
-                            print('dual, finished at iteration: ', i)
-                        break
-
+                    if self.check_dualgap:
+                        # O(np + n + p) = O(np)
+                        w_d_gap = self.dual_gap(self.y)
+                        if w_d_gap < self.tol:
+                            if self._verbose:
+                                print('dual, finished at iteration: ', i)
+                            break
+                        
                     else:
                         # O(3p)
                         Anew = self.update_sorted_active_set(A, Ac_f, all_p)

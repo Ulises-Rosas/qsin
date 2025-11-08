@@ -6,8 +6,8 @@ import time
 seed = 12038
 np.random.seed(seed)
 n = 600
-p = 100000
-lam=0.0001
+p = 10000
+lam=0.0
 alpha = 0.5
 tol = 1e-5
 X = np.random.randn(n, p)
@@ -19,8 +19,8 @@ X_train = (X_train - np.mean(X_train, axis=0)) / np.std(X_train, axis=0)
 X_test = (X_test - np.mean(X_test, axis=0)) / np.std(X_test, axis=0)
 
 
-# self = Lasso(max_iter=1000, lam=lam, seed=seed, tol=tol, fit_intercept=True)
-self = ElasticNet(max_iter=1000, lam=lam, seed=seed, tol=tol, alpha=alpha, fit_intercept=True)
+self = Lasso(max_iter=1000, lam=lam, tol=tol, fit_intercept=True, check_dualgap=False)
+# self = ElasticNet(max_iter=1000, lam=lam, tol=tol, alpha=alpha, fit_intercept=True)
 self._verbose = False
 start = time.time()
 self.fit(X_train, y_train)
@@ -32,8 +32,8 @@ print("Test error: ", test_error)
 from sklearn.linear_model import ElasticNet as skElasticNet
 from sklearn.linear_model import Lasso as skLasso
 
-sklasso = skElasticNet(alpha=lam/2, l1_ratio=alpha, max_iter=1000, tol=tol, fit_intercept=True)
-# sklasso = skLasso(alpha=lam/2, max_iter=10000, tol=tol, fit_intercept=True)
+# sklasso = skElasticNet(alpha=lam/2, l1_ratio=alpha, max_iter=1000, tol=tol, fit_intercept=True)
+sklasso = skLasso(alpha=lam/2, max_iter=10000, tol=tol, fit_intercept=True)
 start = time.time()
 sklasso.fit(X_train, y_train)
 print("\nSklearn Time: ", time.time() - start)
