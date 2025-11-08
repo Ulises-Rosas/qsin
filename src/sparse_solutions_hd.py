@@ -437,9 +437,11 @@ class ElasticNet(Lasso):
                  warm_start=False,
                  tol=1e-4,
                  init_iter=1,
-                 copyX=False):
+                 copyX=False,
+                 check_dualgap=True):
         # passes arguments to the Lasso class
-        super().__init__(max_iter, lam, prev_lam, fit_intercept, warm_start,  tol, init_iter, copyX)
+        super().__init__(max_iter, lam, prev_lam, fit_intercept, warm_start,  
+                         tol, init_iter, copyX, check_dualgap)
 
         self.alpha = alpha
         self.lam = lam
