@@ -66,18 +66,21 @@ pip install qsin
 
 ```bash
 # create dir where sim nets will be stored
-mkdir -p ./test_data/test_sims
+mkdir -p ./demo/test_sims
 
 # simulate 1000 random networks
-sim_nets.R 6 --max_iter 1000 --prefix test --out_path ./test_data/test_sims
+sim_nets.R 6 --max_iter 1000\
+             --prefix test\
+             --out_path ./demo/test_sims\
+             --ncores 4
 ```
 
 ### 2. Expected concordance factors for simulated networks
 
 ```bash
 infer_qlls.jl ./test_data/1_seqgen.CFs.csv\
-              ./test_data/test_sims/test*.txt\
-              --outfile ./test_data/test_qll.csv\
+              ./demo/test_sims/test*.txt\
+              --outfile ./demo/test_qll.csv\
               --ncores 4
 ```
 
@@ -90,11 +93,11 @@ path_subsampling.py ./test_data/test_qll.csv\
         --factor 0.5\
         --e 1e-2    \
         --cv\
-        --folds 2\
+        --folds 5\
         --alpha 0.5 0.95 0.99\
         --ncores 4\
         --verbose\
-        --prefix ./test_data/linear_batches
+        --prefix ./demo/linear_batches
 ```
 
 * `--wpath` specify whether the elastic net path information is output it.
@@ -107,6 +110,7 @@ path_subsampling.py ./test_data/test_qll.csv\
 * `--verbose` specifies that the output should be verbose.
 * `--prefix` is the prefix for the output files.
 
+At some points of the Elastic Net path in some folds of cross-validation we might see convergence warning messages when`alpha` 0.99 or 0.95 is tested. This means that, at these points, Lasso-like solutions are likely not the best fit. These messages dissapear when the tolerance value is increased (e.g., `--tol 0.01`).
 
 You can check the elastic net path produced for creating the subsample by running the following `python` code:
 
@@ -114,8 +118,8 @@ You can check the elastic net path produced for creating the subsample by runnin
 import numpy as np
 import matplotlib.pyplot as plt
 
-errors_path = np.loadtxt("./test_data/linear_batches_testErrors.csv", delimiter=',')
-elnet_path  = np.loadtxt("./test_data/linear_batches_elnetPath.csv", delimiter=',')
+errors_path = np.loadtxt("./demo/linear_batches_testErrors.csv", delimiter=',')
+elnet_path  = np.loadtxt("./demo/linear_batches_elnetPath.csv", delimiter=',')
 
 fs = 14
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 5))
@@ -141,14 +145,12 @@ plt.tight_layout()
 
 ```bash
 # lets take the last row from the subsamples obtained above
-tail -n1 test_data/linear_batches_overlappedBatches.txt > ./test_data/linear_batches_last.txt
-
-# lets infer a network using that subsample
+tail -n1 ./demo/linear_batches_overlappedBatches.txt > ./demo/linear_batches_last.txt
 infer_nets_batches.jl ./test_data/1_seqgen.QMC.tre\
         ./test_data/1_seqgen.CFs.csv\
-        ./test_data/linear_batches_last.txt\
+        ./demo/linear_batches_last.txt\
         --h_max 1\
-        --prefix linear_overlapped\
+        --prefix ./demo/linear_overlapped\
         --ncores 4\
         --nruns 10
 ```
@@ -160,7 +162,7 @@ using PhyloNetworks;
 using PhyloPlots; # you may need to install PhyloPlots package
 using RCall;      # you may need to install RCall package
 
-qsin_net = readInputTrees("./linear_overlapped_nets.txt");
+qsin_net = readInputTrees("./demo/linear_overlapped_nets.txt");
 ori_net = readInputTrees("./test_data/full_data_net6.txt");
 
 R"layout(matrix(1:2, 1, 2))"; 
