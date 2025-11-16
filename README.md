@@ -102,7 +102,7 @@ path_subsampling.py ./test_data/test_qll.csv\
 
 * `--wpath` specify whether the elastic net path information is output it.
 * `--factor` is the subsampling factor. 0.5 means that we write the selected rows of the input file until around half of the rows are selected.
-* `--e` is the constant that multiplies the lambda_max to get the lambda_min value.
+* `--e` is the constant that multiplies the lambda_max to get the lambda_min value. For larger datasets this value can be set to smaller values (e.g., 1e-3 or 1e-4) to get a larger elastic net path.
 * `--cv` specifies that cross-validation is to be used.
 * `--folds` is the number of folds for cross-validation.
 * `--alpha` is the alpha values to be used.
@@ -111,6 +111,38 @@ path_subsampling.py ./test_data/test_qll.csv\
 * `--prefix` is the prefix for the output files.
 
 At some points of the Elastic Net path in some folds of cross-validation we might see convergence warning messages when`alpha` 0.99 or 0.95 is tested. This means that, at these points, Lasso-like solutions are likely not the best fit. These messages dissapear when the tolerance value is increased (e.g., `--tol 0.01`).
+
+<details>
+<summary><b> Subsampling using ISLE, the non-parametric sparse model</b></summary>
+
+We essentially add the `--isle` flag to the command above and the correspoding ensemble parameters:
+
+```bash
+path_subsampling.py ./test_data/test_qll.csv\
+        ./test_data/1_seqgen.CFs.csv\
+        --wpath     \
+        --factor 0.5\
+        --e 1e-2    \
+        --cv\
+        --folds 5\
+        --alpha 0.5 0.95 0.99\
+        --ncores 4\
+        --verbose\
+        --prefix ./demo/non_linear_batches\
+        --isle  --eta  0.0316 0.1487 0.2658 0.3829 0.5\
+        --nu 0.01 0.0325 0.055 0.0775 0.1\
+        --max_leaf_nodes 2\
+        --cv_sample 300
+```
+
+* `--isle` specifies that the ISLE method is to be used.
+* `--eta` is the set of eta values to be used. This add randomness to the ensemble.
+* `--nu` is the set of nu values to be used. This add memory to the ensemble.
+* `--max_leaf_nodes` is the maximum number of leaf nodes to be used in the base learners. It is fixed to 2 in this example but it can also be a list of values.
+* `--cv_sample` is the maximum number of hyperparameter combinations to be tested in cross-validation. If the total number of combinations is larger than this value, a random sample of this size is taken from the total combinations.
+</details>
+
+
 
 You can check the elastic net path produced for creating the subsample by running the following `python` code:
 
