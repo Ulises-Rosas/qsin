@@ -285,21 +285,19 @@ class Lasso:
                         print('kkt, finished at iteration: ', i)
                     break
 
-                else:
-                    if self.check_dualgap:
-                        # O(np + n + p) = O(np)
-                        w_d_gap = self.dual_gap(self.y)
-                        if w_d_gap < self.tol:
-                            if self._verbose:
-                                print('dual, finished at iteration: ', i)
-                            break
-                        
-                    else:
-                        # O(3p)
-                        Anew = self.update_sorted_active_set(A, Ac_f, all_p)
-                        # O(2p)
-                        A = set(Anew)
-                        A_rr = np.array(Anew)
+                if self.check_dualgap:
+                    # O(np + n + p) = O(np)
+                    w_d_gap = self.dual_gap(self.y)
+                    if w_d_gap < self.tol:
+                        if self._verbose:
+                            print('dual, finished at iteration: ', i)
+                        break
+
+                # O(3p)
+                Anew = self.update_sorted_active_set(A, Ac_f, all_p)
+                # O(2p)
+                A = set(Anew)
+                A_rr = np.array(Anew)
 
         if i == left_iter - 1:
             # if the iterations reach this point,
