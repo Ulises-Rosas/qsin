@@ -205,3 +205,8 @@ plot(qsin_net[1], showgamma=true);
 R"mtext"("Half data network (8 rows)")
 ```
 ![here](https://github.com/Ulises-Rosas/qsin/blob/main/imgs/plot_nets.png)
+
+
+# Reference
+
+Rosas-Puchuri, U., Kolbow, N., Solís-Lemus, C., Khanmohammadi, S., & Ricardo, B. R. (2025). Sparse learning for scalable phylogenetic network inference. bioRxiv, 2025-11.
