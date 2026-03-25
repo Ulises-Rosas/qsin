@@ -7,6 +7,8 @@ out_path = "."
 prefix   =  "sim_"
 ncores   =  1
 max_iter = 100
+lambda = 1
+mu = 0.2
 
 
 help_msg <- function(){
@@ -19,6 +21,8 @@ Usage: sim_networks.R N
         --prefix prefix
         --ncores ncores
         --max_iter max_iter
+        --lambda lambda
+        --mu mu
 
 Required arguments:
   N: int; number of tips on the simulated networks
@@ -30,6 +34,8 @@ Optional arguments:
   --max_iter: int; this number is multiplied by ~4 so that from all 
             simulated networks we make sure that we recover max_iter number of
             level-1 networks (default: 100)
+  --lambda: numeric; speciation rate (default: 1)
+  --mu: numeric; extinction rate (default: 0.2)
 ")
 quit(status = 1)
 }
@@ -56,6 +62,12 @@ for(i in 1:length(args)){
     
   }else if( args[i] == '--max_iter' ){
     max_iter = as.integer(args[i + 1])
+    
+  }else if( args[i] == '--lambda' ){
+    lambda = as.numeric(args[i + 1])
+    
+  }else if( args[i] == '--mu' ){
+    mu = as.numeric(args[i + 1])
     
   }else if( args[i] == '--help' || args[i] == '-h'){
     help_msg()
@@ -123,8 +135,8 @@ mclapply(i:as.integer(max_iter*4.6), function(i){
 
   ssa_nets<-sim.bdh.taxa.ssa(n=N,
                              numbsim=1,
-                             lambda=1,
-                             mu=0.2,
+                             lambda=lambda,
+                             mu=mu,
                              nu=nu,
                              hybprops = hybrid_proportions,
                              hyb.inher.fxn = inheritance.fxn,
