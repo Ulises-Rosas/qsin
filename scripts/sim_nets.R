@@ -9,6 +9,8 @@ ncores   =  1
 max_iter = 100
 lambda = 1
 mu = 0.2
+seed = 12038
+set.seed(seed)
 
 
 help_msg <- function(){
@@ -36,6 +38,7 @@ Optional arguments:
             level-1 networks (default: 100)
   --lambda: numeric; speciation rate (default: 1)
   --mu: numeric; extinction rate (default: 0.2)
+  --seed: int; random seed (default: 12038)
 ")
 quit(status = 1)
 }
@@ -69,6 +72,9 @@ for(i in 1:length(args)){
   }else if( args[i] == '--mu' ){
     mu = as.numeric(args[i + 1])
     
+  }else if( args[i] == '--seed' ){
+    seed = as.numeric(args[i + 1])
+    
   }else if( args[i] == '--help' || args[i] == '-h'){
     help_msg()
   }
@@ -82,6 +88,7 @@ if (is.null(N) == T){
 # importing libraries
 library(SiPhyNetwork)
 library(parallel)
+set.seed(seed)
 
 
 inheritance.fxn <- make.beta.draw(10,10)
