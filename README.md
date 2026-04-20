@@ -68,7 +68,7 @@ pip install qsin
 # create dir where sim nets will be stored
 mkdir -p ./demo/test_sims
 
-# simulate 1000 random networks
+# simulate 1000 random networks with 6 taxa.
 sim_nets.R 6 --max_iter 1000\
              --prefix test\
              --out_path ./demo/test_sims\
