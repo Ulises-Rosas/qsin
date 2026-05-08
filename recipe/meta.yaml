@@ -1,5 +1,5 @@
 {% set name = "qsin_deps" %}
-{% set version = "0.5" %}
+{% set version = "0.6" %}
 
 {% set posix = 'm2-' if win else '' %}
 {% set native = 'm2w64-' if win else '' %}
@@ -14,8 +14,8 @@ source:
     sha256: 97ba3624869c2972ca4d72cf8a5b697f3c7cddd23b06b5a2963267fbb507e586
     folder: r_dep
 
-  - url: https://pypi.io/packages/source/q/qsin/qsin-0.4.tar.gz
-    sha256: 95cc7016be9a8a0be6751cc53c92dae501e72f8b3ce91ae36be7dd1fe0ec4611
+  - url: https://pypi.io/packages/source/q/qsin/qsin-0.11.18.tar.gz
+    sha256: 1d25e545c7ea9776ca383587766ab34ec8897a0b6b320e9c2df8c9513d5434b7
     folder: py_dep
 
   # - git_url: https://github.com/JuliaIO/Suppressor.jl.git

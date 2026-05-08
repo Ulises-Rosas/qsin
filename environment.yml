@@ -5,7 +5,7 @@ channels:
   - urosas
 
 dependencies:
-  - qsin_deps
+  - qsin_deps >=0.6
   # - python >=3.6
   # - numpy
   # - numba
